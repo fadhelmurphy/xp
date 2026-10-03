@@ -109,7 +109,12 @@ Ukuran contoh yang ada di repo:
 | `rating-stars` (Vue) | 70 kB | 82 kB | - |
 | `faq-list` (Svelte) | 64 kB | 30 kB | - |
 
-Browser hanya mengunduh bundle `web`; bundle `ssr` dipakai server. Komponen xp memakai satu runtime bersama (`xp-runtime.<hash>.js`, 13 kB, 5,5 kB gzip) yang diunduh sekali per halaman, jadi setiap komponen xp tambahan hanya menambah 2-3 kB. Ini berlaku juga untuk komponen dari remote yang berbeda: remote yang di-build dengan versi xp yang sama menghasilkan runtime yang identik, dan adapter mengenalinya dari sha256-nya, jadi runtime dari remote kedua tidak diunduh lagi. Remote dengan versi xp berbeda tetap memuat runtime-nya sendiri. Komponen React, Vue, dan Svelte membawa runtime framework-nya sendiri di setiap bundle.
+Browser hanya mengunduh bundle `web`; bundle `ssr` dipakai server. Komponen xp memakai satu runtime bersama (`xp-runtime.<hash>.js`, 13 kB, 5,5 kB gzip) yang diunduh sekali per halaman, jadi setiap komponen xp tambahan hanya menambah 2-3 kB. Ini berlaku juga untuk komponen dari remote yang berbeda, termasuk yang di-build dengan versi xp berbeda:
+
+- Versi xp sama: file runtime-nya identik, dan adapter mengenalinya dari sha256-nya.
+- Versi xp berbeda: setiap runtime mencatat `api` dan versinya. Runtime yang lebih baru dengan `api` yang sama bisa menjalankan komponen yang di-build xp versi lebih lama, jadi runtime yang sudah dimuat dipakai lagi.
+
+Kontraknya ada di [`runtime/api.json`](runtime/api.json): dalam satu `api`, export runtime hanya boleh bertambah. Kalau ada yang dihapus atau perilakunya berubah, `api` dinaikkan, dan remote dengan `api` berbeda memuat runtime masing-masing. Test memastikan runtime tidak melanggar daftar itu. Komponen React, Vue, dan Svelte membawa runtime framework-nya sendiri di setiap bundle.
 
 Kalau memuat bundle web sendiri tanpa adapter: jalankan dulu `xp-runtime.<hash>.js` (dari `components[nama].web.runtime`), lalu jalankan bundle komponen dengan `require(id)` yang mengembalikan `runtime.modules[id]`. Contohnya ada di `adapters/next/client.js`.
 
@@ -122,7 +127,7 @@ npx github:fadhelmurphy/xp serve               # remote di :4400
 npm test                                        # 40 test
 npm run e2e                                     # tes app Next.js/Nuxt di Chromium (APP_URL=http://localhost:3300)
 npm run e2e:dev                                 # tes pratinjau xp dev di Chromium
-npm run e2e:remotes                             # dua remote di satu halaman, runtime dimuat sekali
+npm run e2e:remotes                             # dua remote (versi xp sama dan beda) di satu halaman, runtime dimuat sekali
 node tests/e2e/consumer-dev.mjs                 # tes xp dev dengan next dev / nuxt dev (lihat isi file)
 ```
 
@@ -515,7 +520,7 @@ Yang sudah dites:
 
 - Runtime, protokol, host DOM/SSR/native, CLI, dan manifest. Bundle native dijalankan di QuickJS dan hasil tree-nya dicek di unit test.
 - Target web untuk React, Vue, dan Svelte (SSR, hydrate, scoped CSS) di jsdom dan Chromium.
-- Adapter Next.js dan Nuxt, end-to-end di Chromium, termasuk hydrate yang memakai elemen dari server, slide yang ikut mouse saat digeser, dan runtime xp yang diunduh sekali untuk semua komponen, juga dari dua remote berbeda.
+- Adapter Next.js dan Nuxt, end-to-end di Chromium, termasuk hydrate yang memakai elemen dari server, slide yang ikut mouse saat digeser, dan runtime xp yang diunduh sekali untuk semua komponen, juga dari dua remote berbeda dan dari remote dengan versi xp berbeda.
 - CLI dari proyek terpisah, lewat `npm pack` dan langsung lewat `npx github:fadhelmurphy/xp`, termasuk menu interaktif.
 - `setTimeout`/`setInterval` dan snapshot state di QuickJS dan JavaScriptCore (lewat Bun).
 - `xp dev` di Chromium: file diubah, pratinjau memuat versi baru, state tetap. Hal yang sama dengan `next dev` dan `nuxt dev`.
@@ -529,4 +534,4 @@ Yang belum:
 - Belum ada GIF demo untuk Android dan iOS.
 - Layout di mobile belum memakai Yoga, jadi hasilnya bisa sedikit berbeda dari web.
 - `dragAxis` di Android (Compose) dan iOS (SwiftUI) belum pernah dijalankan; logika sumbunya saja yang dites.
-- Runtime hanya dipakai bersama kalau isinya identik (versi xp sama). Remote dengan versi xp berbeda memuat runtime masing-masing.
+- Kalau komponen dari xp versi lama dimuat lebih dulu, lalu datang komponen yang butuh runtime lebih baru, runtime baru ikut dimuat (dua runtime di halaman itu). Komponen sesudahnya memakai yang terbaru. Urutan sebaliknya cukup satu runtime.

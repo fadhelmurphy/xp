@@ -88,14 +88,55 @@ function evaluate(code, require) {
   return module.exports;
 }
 
+// Runtime xp yang sudah dimuat (atau sedang dimuat) di halaman ini, per `api`.
+const runtimesByApi = new Map(); // api → [{ version, promise }]
+
+/** Bandingkan versi "a.b.c". Hasil > 0 kalau a lebih baru. */
+export function compareVersions(a, b) {
+  const pa = String(a).split(/[.-]/).map((x) => parseInt(x, 10) || 0);
+  const pb = String(b).split(/[.-]/).map((x) => parseInt(x, 10) || 0);
+  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+    const d = (pa[i] ?? 0) - (pb[i] ?? 0);
+    if (d) return d;
+  }
+  return 0;
+}
+
 /**
- * Runtime xp bersama. Di-cache per sha256, bukan per URL: remote lain yang di-build dengan versi xp
- * yang sama menghasilkan file runtime yang identik, jadi runtime yang sudah dimuat dari remote
- * pertama langsung dipakai (tidak diunduh lagi). Versi xp berbeda → runtime terpisah.
+ * Runtime xp bersama, dipakai oleh semua komponen xp di halaman, dari remote mana pun.
+ * - Isi sama (sha256 sama) → runtime yang sudah ada dipakai.
+ * - `api` sama dan versi yang sudah dimuat >= versi yang dibutuhkan → dipakai juga: runtime yang
+ *   lebih baru kompatibel dengan komponen yang di-build xp versi lebih lama (lihat runtime/api.json).
+ * - Selain itu runtime ini dimuat, dan dipakai juga oleh komponen berikutnya yang cocok.
  */
 function loadRuntime(runtime) {
   const key = runtime.sha256 ? `xp-runtime:${runtime.sha256}` : runtime.src;
-  return once(key, async () => evaluate(await fetchVerified(runtime.src, runtime.sha256)));
+  if (cache.has(key) || runtime.api == null || runtime.version == null) return once(key, () => fetchRuntime(runtime));
+
+  const loaded = runtimesByApi.get(runtime.api) ?? [];
+  const newest = loaded
+    .filter((r) => compareVersions(r.version, runtime.version) >= 0)
+    .sort((a, b) => compareVersions(b.version, a.version))[0];
+  if (newest) return newest.promise;
+
+  const promise = once(key, () => fetchRuntime(runtime));
+  const entry = { version: runtime.version, promise };
+  runtimesByApi.set(runtime.api, [...loaded, entry]);
+  promise.catch(() => runtimesByApi.set(runtime.api, (runtimesByApi.get(runtime.api) ?? []).filter((r) => r !== entry)));
+  return promise;
+}
+
+async function fetchRuntime(runtime) {
+  const mod = evaluate(await fetchVerified(runtime.src, runtime.sha256));
+  if (runtime.api != null && mod.api != null && mod.api !== runtime.api) {
+    throw new Error(`${runtime.src}: runtime api ${mod.api}, manifest menyebut ${runtime.api}`);
+  }
+  return mod;
+}
+
+/** Runtime xp yang sedang dipakai di halaman ini (untuk debug dan tes). */
+export function loadedRuntimes() {
+  return [...runtimesByApi.entries()].flatMap(([api, list]) => list.map((r) => ({ api, version: r.version })));
 }
 
 /**
@@ -119,7 +160,9 @@ export function loadBundle(src, expectedHash, runtime) {
 
 /** Lokasi runtime bersama untuk satu entri manifest, atau null (bundle mandiri / framework lain). */
 export function runtimeOf(base, web) {
-  return web.runtime ? { src: `${base}/${web.runtime.file}`, sha256: web.runtime.sha256 } : null;
+  if (!web.runtime) return null;
+  const { file, sha256, api, version } = web.runtime;
+  return { src: `${base}/${file}`, sha256, api, version };
 }
 
 // --- xp dev ---

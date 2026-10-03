@@ -75,3 +75,54 @@ test("build xp yang sama di proyek berbeda menghasilkan runtime yang identik", a
   assert.equal(a.sha256, b.sha256);
   assert.equal(a.code, b.code);
 });
+
+test("runtime versi xp berbeda: runtime yang lebih baru dipakai juga oleh komponen lama", async () => {
+  // @ts-expect-error modul .js tanpa tipe
+  const { loadBundle: load, compareVersions } = await import("../adapters/vite/client.js");
+  assert.ok(compareVersions("0.10.0", "0.9.3") > 0);
+  assert.equal(compareVersions("1.2", "1.2.0"), 0);
+
+  const runtimeCode = (v: string) => `module.exports = { api: 1, version: "${v}", modules: { "@xp/runtime": { v: "${v}" } } };`;
+  const component = (n: number) => `module.exports.n = ${n}; module.exports.runtime = require("@xp/runtime");`;
+  const fetched: string[] = [];
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = (async (url: string) => {
+    fetched.push(url);
+    const v = url.match(/runtime-(\d+\.\d+\.\d+)/)?.[1];
+    return new Response(v ? runtimeCode(v) : component(Number(url.match(/c(\d+)/)![1])));
+  }) as typeof fetch;
+  const rt = (team: string, version: string) => ({ src: `https://${team}.cdn/runtime-${version}.js`, sha256: hex(runtimeCode(version)), api: 1, version });
+  const comp = (team: string, n: number, version: string) => load(`https://${team}.cdn/c${n}.js`, hex(component(n)), rt(team, version));
+  try {
+    // Tim A (xp 0.3.0) dimuat duluan, lalu tim B (xp 0.2.0): runtime 0.3.0 dipakai keduanya.
+    const a = await comp("tim-a", 1, "0.3.0");
+    const b = await comp("tim-b", 2, "0.2.0");
+    assert.equal(a.runtime.v, "0.3.0");
+    assert.equal(b.runtime, a.runtime, "komponen lama memakai runtime yang lebih baru");
+    assert.ok(!fetched.some((u) => u.includes("runtime-0.2.0")), "runtime 0.2.0 tidak diunduh");
+
+    // Komponen yang butuh versi lebih baru dari yang sudah ada → runtime barunya dimuat,
+    // dan komponen berikutnya memakai yang terbaru.
+    const c = await comp("tim-c", 3, "0.4.0");
+    const d = await comp("tim-d", 4, "0.2.5");
+    assert.equal(c.runtime.v, "0.4.0");
+    assert.equal(d.runtime.v, "0.4.0");
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+});
+
+test("runtime xp memenuhi kontrak api.json (export hanya boleh bertambah)", async () => {
+  const { readFileSync } = await import("node:fs");
+  const contract = JSON.parse(readFileSync("runtime/api.json", "utf8"));
+  const manifest = JSON.parse(readFileSync("dist/manifest.json", "utf8"));
+  const rt = manifest.components["promo-modal"].web.runtime;
+  assert.equal(rt.api, contract.api);
+  assert.match(rt.version, /^\d+\.\d+\.\d+/);
+  const mod = { exports: {} as any };
+  new Function("module", "exports", "require", readFileSync(`dist/${rt.file}`, "utf8"))(mod, mod.exports, () => {});
+  assert.equal(mod.exports.api, contract.api);
+  for (const [id, names] of Object.entries<string[]>(contract.exports)) {
+    for (const n of names) assert.ok(n in mod.exports.modules[id], `${id} harus mengekspor ${n}`);
+  }
+});

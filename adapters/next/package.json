@@ -1,6 +1,6 @@
 {
   "name": "@xp/next",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "description": "Import komponen xp dari URL di Next.js: import X from \"xp:ui/nama\"",
   "type": "module",
   "exports": {

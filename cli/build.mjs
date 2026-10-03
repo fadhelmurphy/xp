@@ -12,6 +12,7 @@
 //   crossplatform  → hanya komponen xp: web + native
 import { build } from "esbuild";
 import { createHash } from "node:crypto";
+import { readFileSync } from "node:fs";
 import { mkdir, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -46,6 +47,12 @@ const xpCommon = {
 // Bundle web komponen me-require modul-modul ini; loader menyediakannya dari file runtime.
 export const RUNTIME_MODULES = ["@xp/runtime", "@xp/runtime/jsx-runtime", "@xp/runtime/hosts/dom"];
 
+// Kompatibilitas runtime: komponen butuh runtime dengan `api` yang sama dan `version` minimal
+// versi xp yang mem-build-nya. Runtime yang lebih baru dalam satu `api` bisa menjalankan komponen
+// yang lebih lama, jadi satu halaman cukup memuat satu runtime walau remote-nya beda versi xp.
+const RUNTIME_API = JSON.parse(readFileSync(path.join(RUNTIME, "api.json"), "utf8")).api;
+const XP_VERSION = JSON.parse(readFileSync(path.join(here, "..", "package.json"), "utf8")).version;
+
 const runtimeBuild = () => ({
   ...xpCommon,
   format: "cjs",
@@ -54,6 +61,8 @@ const runtimeBuild = () => ({
     contents:
       RUNTIME_MODULES.map((m, i) => `import * as m${i} from "${m}";`).join("\n") +
       `\nexport const protocol = ${PROTOCOL_VERSION};` +
+      `\nexport const api = ${RUNTIME_API};` +
+      `\nexport const version = ${JSON.stringify(XP_VERSION)};` +
       `\nexport const modules = { ${RUNTIME_MODULES.map((m, i) => `"${m}": m${i}`).join(", ")} };`,
     resolveDir: RUNTIME,
     loader: "js",
@@ -204,7 +213,7 @@ export async function runBuild({ srcDir, outDir, jobs, clean = false, projectDir
   if (jobs.some((j) => j.kind === "xp" && j.outputs.includes("web"))) {
     const code = (await build(runtimeBuild())).outputFiles[0].text;
     const hash = sha(code);
-    runtime = { file: `xp-runtime.${hash.slice(0, 10)}.js`, sha256: hash, bytes: code.length, code };
+    runtime = { file: `xp-runtime.${hash.slice(0, 10)}.js`, sha256: hash, bytes: code.length, api: RUNTIME_API, version: XP_VERSION, code };
   }
 
   const results = [];
@@ -241,7 +250,10 @@ export async function runBuild({ srcDir, outDir, jobs, clean = false, projectDir
         const fileName = `${name}.${out}.${hash.slice(0, 10)}.js`;
         written.push([fileName, code]);
         record[out] = { file: fileName, bytes: code.length, sha256: hash };
-        if (kind === "xp" && out === "web") record.web.runtime = { file: runtime.file, sha256: runtime.sha256, bytes: runtime.bytes };
+        if (kind === "xp" && out === "web") {
+          const { file, sha256, bytes, api, version } = runtime;
+          record.web.runtime = { file, sha256, bytes, api, version };
+        }
         for (const w of result.warnings ?? []) warnings.push(w.text);
         if (out === "native") {
           record.primitives = await primitivesUsed(result.metafile);

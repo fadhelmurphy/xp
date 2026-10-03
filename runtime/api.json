@@ -1,0 +1,9 @@
+{
+  "//": "Kontrak runtime xp untuk browser. Dalam satu `api`, export hanya boleh bertambah dan perilakunya harus kompatibel, karena komponen yang di-build dengan xp versi lama bisa dijalankan oleh runtime versi yang lebih baru. Menghapus atau mengubah export = naikkan `api`.",
+  "api": 1,
+  "exports": {
+    "@xp/runtime": ["Fragment", "Image", "Modal", "Pressable", "ScrollView", "Text", "TextInput", "View", "createElement", "useCallback", "useEffect", "useMemo", "useRef", "useState"],
+    "@xp/runtime/jsx-runtime": ["Fragment", "jsx", "jsxs"],
+    "@xp/runtime/hosts/dom": ["mount"]
+  }
+}
