@@ -7,7 +7,8 @@
     "test": "npm run build && tsx --test tests/*.test.ts tests/*.test.tsx",
     "typecheck": "tsc -p .",
     "serve": "node cli/xp.mjs serve dist --port 4400",
-    "e2e": "node tests/e2e/consumer.mjs"
+    "e2e": "node tests/e2e/consumer.mjs",
+    "sync-fixtures": "node scripts/sync-fixtures.mjs"
   },
   "keywords": [],
   "author": "",

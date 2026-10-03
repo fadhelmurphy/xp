@@ -15,7 +15,7 @@ dist/
   manifest.json                      → nama → file terbaru, hash, primitive yang dipakai
   promo-modal.<hash>.d.ts            → tipe props (untuk autocomplete di app konsumen)
   promo-modal.web.<hash>.js          → browser + SSR     (~10 kB, runtime ikut)
-  promo-modal.native.<hash>.js       → QuickJS di iOS/Android (~6 kB, runtime ikut)
+  promo-modal.native.<hash>.js       → QuickJS (Android) / JavaScriptCore (iOS) (~6 kB, runtime ikut)
 ```
 
 ## Menulis komponen
@@ -145,11 +145,14 @@ Props harus bisa di-JSON-kan (`String`, angka, `Boolean`, `null`, `List`, `Map`)
 
 Saat development dengan emulator, remote lokal diakses lewat `http://10.0.2.2:4400`. Demo app lengkap dan langkah menjalankannya ada di [`adapters/android/README.md`](adapters/android/README.md).
 
-## Konsumen mobile: iOS (belum tersedia)
+## Konsumen mobile: iOS (`adapters/ios`)
 
-SDK iOS belum dibuat. Rencananya berupa Swift Package `XPKit` dengan API yang sama seperti Android:
+Komponen yang sama dirender dengan SwiftUI. Logikanya dijalankan di JavaScriptCore bawaan iOS, tanpa WebView dan tanpa dependency pihak ketiga. `Modal` tampil sebagai `.sheet`, `Pressable` sebagai `Button`, dan `TextInput` sebagai `TextField`.
+
+Pasang lewat Xcode: *File → Add Package Dependencies… → Add Local…* → `adapters/ios`, lalu tambahkan library **XPKit** (iOS 16+).
 
 ```swift
+import SwiftUI
 import XPKit
 
 struct PromoScreen: View {
@@ -163,7 +166,9 @@ struct PromoScreen: View {
 }
 ```
 
-Implementasinya memakai QuickJS dan SwiftUI dengan protokol yang sama (lihat bagian Protokol di bawah). Bundle `*.native.*.js` yang sekarang sudah bisa dipakai apa adanya.
+Props harus bisa di-JSON-kan (`String`, angka, `Bool`, `Array`, `Dictionary`). Kalau props berubah, komponen di-update tanpa remount, sehingga state di dalamnya tetap. Untuk development dengan `http://`, tambahkan `NSAllowsLocalNetworking` di Info.plist. Simulator bisa langsung mengakses `http://localhost:4400` di Mac.
+
+Demo, tes (`swift test`), dan detail lainnya ada di [`adapters/ios/README.md`](adapters/ios/README.md).
 
 ## Cara kerja
 
@@ -181,7 +186,7 @@ Ini satu-satunya kontrak yang perlu diimplementasikan tim mobile (`runtime/proto
 **SDK → JS** (mode antrean, paling sederhana: SDK cukup bisa `evaluate(script)`)
 1. Buat context QuickJS. Opsional: pasang `globalThis.__xp_native = { send(batchJson) }` untuk mode bridge.
 2. Unduh `manifest.json` → `components[nama].native.file`, lalu verifikasi `sha256`-nya.
-3. `eval(bundle)`, lalu panggil `XP.mount(propsJson)`.
+3. `eval(bundle)` (QuickJS di Android, JavaScriptCore di iOS), lalu panggil `XP.mount(propsJson)`.
 4. Saat ada event: `XP.dispatch(handlerKey, argsJson)`.
 5. Setiap `XP.*` mengembalikan string JSON berisi daftar batch, sinkron. Tidak perlu menjalankan microtask. (Mode bridge: batch dikirim lewat `send`, dan hasilnya `"[]"`.)
 
@@ -209,5 +214,6 @@ Ini satu-satunya kontrak yang perlu diimplementasikan tim mobile (`runtime/proto
 - **M1 (selesai, teruji):** runtime, protokol, host native/DOM/SSR, CLI build + manifest. Bundle native dijalankan di QuickJS, dan hasilnya (modal, state, total, kondisional, event, update props, unmount) diverifikasi lewat tree operasi.
 - **Adapter Next.js & Nuxt (selesai, teruji di Chromium):** import `xp:ui/nama`, SSR + hydrate, tipe otomatis, update tanpa rebuild. Nuxt dibangun di atas `@xp/vite`, yang juga bisa dipakai untuk SvelteKit.
 - **SDK Android (`adapters/android`):** `XPView(base, name, props)`, yang memakai QuickJS (zipline) + Jetpack Compose, plus demo app. Inti-nya (tree, style, JSON) teruji dengan kotlinc terhadap sesi rekaman QuickJS. Bagian Compose belum dikompilasi di sini; lihat `adapters/android/README.md`.
-- **M2 sisa:** SDK iOS (QuickJS + SwiftUI), Yoga untuk layout identik.
+- **SDK iOS (`adapters/ios`):** `XPView(base:name:props:)`, yang memakai JavaScriptCore + SwiftUI, plus demo `ContentView`. Bundle native sudah terbukti jalan di JavaScriptCore (disimulasikan lewat Bun dengan alur yang sama seperti `XPEngine`). Kode Swift belum dikompilasi; jalankan `swift test` di Mac untuk memastikannya.
+- **M2 sisa:** uji Android & iOS di emulator/simulator, Yoga untuk layout identik.
 - **M3:** dev server + HMR ke device, API plugin, signing bundle, pengecekan kapabilitas host, hydration yang mengklaim node SSR (saat ini client merender ulang isi yang identik).
