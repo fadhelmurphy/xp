@@ -335,16 +335,14 @@ struct XPRenderer {
     }
 
     /// Box model: padding → ukuran → latar/border/sudut → opacity → margin.
-    /// onSwipe: geseran minimal XPGesture.threshold pt. Dipasang simultan supaya tap Button tetap jalan.
+    /// onSwipe dan dragAxis. Lihat XPDraggable.
     private func swipe(_ n: XPNode, _ v: AnyView) -> AnyView {
-        guard let key = n.handler("onSwipe") else { return v }
-        return AnyView(v.simultaneousGesture(
-            DragGesture(minimumDistance: 20).onEnded { g in
-                if let dir = XPGesture.direction(dx: g.translation.width, dy: g.translation.height) {
-                    model.dispatch(key, [dir])
-                }
-            }
-        ))
+        let key = n.handler("onSwipe")
+        let axis = n.string("dragAxis")
+        guard key != nil || axis != nil else { return v }
+        return AnyView(XPDraggable(content: v, axis: axis) { dir in
+            if let key { model.dispatch(key, [dir]) }
+        })
     }
 
     private func box<V: View>(_ v: V, _ s: XPStyle, _ fillWidth: Bool, _ fillHeight: Bool,
@@ -557,5 +555,31 @@ extension Color {
             blue: Double(argb & 0xFF) / 255,
             opacity: Double((argb >> 24) & 0xFF) / 255
         )
+    }
+}
+
+/// onSwipe: geseran minimal XPGesture.threshold pt. dragAxis: selama digeser view ikut jari di
+/// sumbu itu, lalu kembali saat dilepas. Gesture dipasang simultan supaya Button tetap menerima tap.
+struct XPDraggable: View {
+    let content: AnyView
+    let axis: String?
+    let onSwipe: (String) -> Void
+    @GestureState private var drag: CGSize = .zero
+
+    var body: some View {
+        let follow = XPGesture.follow(axis: axis, dx: drag.width, dy: drag.height)
+        content
+            .offset(x: follow.x, y: follow.y)
+            // Animasi hanya saat kembali; selama digeser view langsung mengikuti jari.
+            .animation(drag == .zero ? .easeOut(duration: 0.2) : nil, value: drag)
+            .simultaneousGesture(
+                DragGesture(minimumDistance: 10)
+                    .updating($drag) { value, state, _ in state = value.translation }
+                    .onEnded { value in
+                        if let dir = XPGesture.direction(dx: value.translation.width, dy: value.translation.height) {
+                            onSwipe(dir)
+                        }
+                    }
+            )
     }
 }

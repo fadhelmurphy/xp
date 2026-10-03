@@ -3,6 +3,7 @@ package dev.xp.android
 import android.util.Log
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.VectorConverter
 import androidx.compose.animation.core.Easing
 import androidx.compose.animation.core.FastOutLinearInEasing
 import androidx.compose.animation.core.FastOutSlowInEasing
@@ -389,22 +390,44 @@ private fun Modifier.entering(node: XPNode, ctx: XPRenderCtx): Modifier {
     }
 }
 
-/** onSwipe: geseran minimal XPGesture.THRESHOLD dp. Tap biasa tetap sampai ke clickable. */
+/**
+ * onSwipe: geseran minimal XPGesture.THRESHOLD dp. Tap biasa tetap sampai ke clickable.
+ * dragAxis: selama digeser elemen ikut jari di sumbu itu, lalu kembali saat dilepas.
+ */
+@Composable
 private fun Modifier.swipe(node: XPNode, ctx: XPRenderCtx): Modifier {
-    val key = node.handler("onSwipe") ?: return this
+    val key = node.handler("onSwipe")
+    val axis = node.string("dragAxis")
+    if (key == null && axis == null) return this
+    val offset = remember(node.id) { Animatable(Offset.Zero, Offset.VectorConverter) }
+    val scope = rememberCoroutineScope()
     val dispatch = ctx.dispatch
-    return pointerInput(key) {
-        var total = Offset.Zero
-        detectDragGestures(
-            onDragStart = { total = Offset.Zero },
-            onDragEnd = {
-                XPGesture.direction(total.x.toDp().value, total.y.toDp().value)?.let { dispatch(key, listOf(it)) }
-            },
-        ) { change, amount ->
-            change.consume()
-            total += amount
+    val back = { scope.launch { offset.animateTo(Offset.Zero, tween(200)) } }
+    return this
+        .graphicsLayer {
+            translationX = offset.value.x
+            translationY = offset.value.y
         }
-    }
+        .pointerInput(key, axis) {
+            var total = Offset.Zero
+            detectDragGestures(
+                onDragStart = { total = Offset.Zero },
+                onDragEnd = {
+                    if (key != null) {
+                        XPGesture.direction(total.x.toDp().value, total.y.toDp().value)?.let { dispatch(key, listOf(it)) }
+                    }
+                    back()
+                },
+                onDragCancel = { back() },
+            ) { change, amount ->
+                change.consume()
+                total += amount
+                if (axis != null) {
+                    val (x, y) = XPGesture.follow(axis, total.x, total.y)
+                    scope.launch { offset.snapTo(Offset(x, y)) }
+                }
+            }
+        }
 }
 
 private fun Modifier.testTagOf(node: XPNode): Modifier = node.string("testID")?.let { this.testTag(it) } ?: this

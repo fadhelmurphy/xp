@@ -63,8 +63,12 @@ type Base = { style?: Style; testID?: string; entering?: Entering };
 
 /** Arah geser jari (atau mouse di web) yang cukup jauh, lihat `onSwipe`. */
 export type SwipeDirection = "left" | "right" | "up" | "down";
-/** Dipanggil saat pengguna menggeser elemen minimal 40 px ke satu arah. */
-type Swipe = { onSwipe?: (direction: SwipeDirection) => void };
+type Swipe = {
+  /** Dipanggil saat pengguna menggeser elemen minimal 40 px ke satu arah. */
+  onSwipe?: (direction: SwipeDirection) => void;
+  /** Selama digeser, elemen ikut jari di sumbu ini, lalu kembali ke tempatnya saat dilepas. */
+  dragAxis?: "x" | "y";
+};
 
 export type ViewProps = Base & Children & Swipe;
 export type TextProps = Base & Children & { numberOfLines?: number };

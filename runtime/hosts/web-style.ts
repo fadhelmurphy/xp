@@ -52,8 +52,9 @@ export function styleToCss(type: string, style: Style | undefined, extra: Record
   if (s.borderWidth !== undefined) css["border-style"] = "solid";
   if (type === "ScrollView" && extra.horizontal) css["flex-direction"] = "row";
   if (type === "Modal" && !extra.visible) css.display = "none";
-  if (typeof extra.onSwipe === "function") {
-    css["touch-action"] = "pan-y"; // geser horizontal ditangani onSwipe, scroll vertikal tetap jalan
+  if (typeof extra.onSwipe === "function" || extra.dragAxis) {
+    // Geseran di sumbu itu ditangani xp; scroll di sumbu lain tetap jalan.
+    css["touch-action"] = extra.dragAxis === "y" ? "pan-x" : "pan-y";
     css["user-select"] = "none";
   }
   if (type === "Text" && typeof extra.numberOfLines === "number" && extra.numberOfLines > 0) {

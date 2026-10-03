@@ -17,4 +17,11 @@ object XPGesture {
             if (dy < 0) "up" else "down"
         }
     }
+
+    /** Geseran yang diikuti elemen dengan dragAxis "x" atau "y": sumbu lain tetap 0. */
+    fun follow(axis: String, dx: Float, dy: Float): Pair<Float, Float> = when (axis) {
+        "x" -> dx to 0f
+        "y" -> 0f to dy
+        else -> 0f to 0f
+    }
 }

@@ -11,4 +11,13 @@ public enum XPGesture {
         if abs(dx) >= abs(dy) { return dx < 0 ? "left" : "right" }
         return dy < 0 ? "up" : "down"
     }
+
+    /// Geseran yang diikuti view dengan dragAxis "x" atau "y": sumbu lain tetap 0.
+    public static func follow(axis: String?, dx: Double, dy: Double) -> (x: Double, y: Double) {
+        switch axis {
+        case "x": return (dx, 0)
+        case "y": return (0, dy)
+        default: return (0, 0)
+        }
+    }
 }

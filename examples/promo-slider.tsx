@@ -59,6 +59,7 @@ export default function PromoSlider({ slides = DEFAULT_SLIDES, autoplay = 0 }: P
     <View style={{ gap: 12 }}>
       <View
         testID="slide"
+        dragAxis="x"
         onSwipe={(dir) => {
           if (dir === "left") go(active + 1, 1);
           if (dir === "right") go(active - 1, -1);

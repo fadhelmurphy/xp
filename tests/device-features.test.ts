@@ -7,6 +7,7 @@ import { getQuickJS } from "quickjs-emscripten";
 import { swipeDirection } from "../runtime/hosts/gesture";
 import type { Batch } from "../runtime/protocol";
 import { NativeTree } from "../sdk-reference/tree";
+import { evaluate, loadWeb as loadWebBundle } from "./load-web";
 
 const manifest = JSON.parse(readFileSync("dist/manifest.json", "utf8"));
 const slider = manifest.components["promo-slider"];
@@ -81,15 +82,11 @@ test("arah swipe: sumbu dominan, minimal 40", () => {
   assert.equal(swipeDirection(30, 30), null);
 });
 
-function loadWeb(entry: { web: { file: string }; ssr: { file: string } }, dom: JSDOM) {
+function loadWeb(entry: { web: { file: string; runtime?: { file: string } }; ssr: { file: string } }, dom: JSDOM) {
   const g = globalThis as any;
   Object.assign(g, { window: dom.window, document: dom.window.document, Node: dom.window.Node });
-  const evaluate = (file: string) => {
-    const module = { exports: {} as any };
-    new Function("module", "exports", readFileSync(`dist/${file}`, "utf8"))(module, module.exports);
-    return module.exports;
-  };
-  return { ...evaluate(entry.web.file), renderHTML: evaluate(entry.ssr.file).renderHTML } as {
+  const server = evaluate(readFileSync(`dist/${entry.ssr.file}`, "utf8"));
+  return { ...loadWebBundle(entry.web), renderHTML: server.renderHTML } as {
     renderHTML(p: object): string;
     render(el: HTMLElement, p: object): { update(p: object): void; unmount(): void };
   };
@@ -149,6 +146,17 @@ test("web: geser slide dengan pointer", async () => {
   swipe(-80);
   await sleep(0);
   assert.equal(title(), "TOEFL Prep");
+
+  // dragAxis="x": selama digeser, slide ikut pointer; dilepas → kembali.
+  slide.dispatchEvent(new dom.window.MouseEvent("pointerdown", { bubbles: true, clientX: 200, clientY: 50 }));
+  slide.dispatchEvent(new dom.window.MouseEvent("pointermove", { bubbles: true, clientX: 170, clientY: 60 }));
+  assert.match(slide.style.transform, /translate\(-30px, 0px\)/, "ikut pointer di sumbu x saja");
+  assert.equal(slide.style.transition, "none");
+  dom.window.dispatchEvent(new dom.window.MouseEvent("pointerup", { clientX: 175, clientY: 60 })); // dilepas di luar elemen
+  assert.equal(slide.style.transform, "", "kembali ke posisi semula");
+  assert.match(slide.style.transition, /transform 200ms/);
+  await sleep(0);
+  assert.equal(title(), "TOEFL Prep", "geseran 25 px bukan swipe");
   swipe(20); // terlalu pendek
   await sleep(0);
   assert.equal(title(), "TOEFL Prep");

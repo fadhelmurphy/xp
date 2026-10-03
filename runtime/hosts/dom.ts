@@ -66,22 +66,54 @@ class DomHost implements Host {
     }
 
     // onSwipe: geseran pointer (jari atau mouse) minimal SWIPE_THRESHOLD px.
-    let start: { x: number; y: number; pointer: number } | null = null;
-    el.addEventListener("pointerdown", (e) => {
-      if (this.handlers.has(`${id}:onSwipe`)) start = { x: e.clientX, y: e.clientY, pointer: e.pointerId };
+    // dragAxis: selama digeser, elemen ikut pointer di sumbu itu, lalu kembali saat dilepas.
+    // Gerakan dipantau di window supaya pointer yang keluar dari elemen tetap terhitung.
+    el.addEventListener("pointerdown", (down) => {
+      const axis = this.props.get(id)?.dragAxis as "x" | "y" | undefined;
+      if (!this.handlers.has(`${id}:onSwipe`) && !axis) return;
+      if ((down as any).__xpDrag) return; // elemen yang lebih dalam sudah menangani
+      (down as any).__xpDrag = true;
+      const win = el.ownerDocument.defaultView!;
+      const from = { x: down.clientX, y: down.clientY };
+      const base = { transform: el.style.transform, transition: el.style.transition };
+      let dragging = false;
+
+      const move = (e: PointerEvent) => {
+        if (e.pointerId !== down.pointerId || !axis) return;
+        const dx = axis === "x" ? e.clientX - from.x : 0;
+        const dy = axis === "y" ? e.clientY - from.y : 0;
+        if (!dragging && Math.abs(dx) + Math.abs(dy) < 4) return;
+        if (!dragging) {
+          dragging = true;
+          el.style.transition = "none";
+        }
+        el.style.transform = `${base.transform} translate(${dx}px, ${dy}px)`.trim();
+      };
+      const end = (e: PointerEvent, cancelled: boolean) => {
+        if (e.pointerId !== down.pointerId) return;
+        win.removeEventListener("pointermove", move as EventListener);
+        win.removeEventListener("pointerup", up as EventListener);
+        win.removeEventListener("pointercancel", cancel as EventListener);
+        if (dragging) {
+          // Kembali ke posisi semula, lalu style dikembalikan sesuai props.
+          el.style.transition = "transform 200ms ease-out";
+          el.style.transform = base.transform;
+          setTimeout(() => this.nodes.get(id) === el && this.paint(id), 220);
+        }
+        if (cancelled) return;
+        const dir = swipeDirection(e.clientX - from.x, e.clientY - from.y);
+        const fn = this.handlers.get(`${id}:onSwipe`);
+        if (!dir) return;
+        swiped = true; // click yang menyusul geseran bukan tap
+        setTimeout(() => (swiped = false), 0);
+        fn?.(dir);
+      };
+      const up = (e: PointerEvent) => end(e, false);
+      const cancel = (e: PointerEvent) => end(e, true);
+      win.addEventListener("pointermove", move as EventListener);
+      win.addEventListener("pointerup", up as EventListener);
+      win.addEventListener("pointercancel", cancel as EventListener);
     });
-    el.addEventListener("pointerup", (e) => {
-      if (!start || start.pointer !== e.pointerId) return;
-      const dir = swipeDirection(e.clientX - start.x, e.clientY - start.y);
-      start = null;
-      const fn = this.handlers.get(`${id}:onSwipe`);
-      if (!dir || !fn) return;
-      e.stopPropagation(); // elemen terdalam yang punya onSwipe yang menangani
-      swiped = true;
-      setTimeout(() => (swiped = false), 0); // kalau tidak ada click setelahnya
-      fn(dir);
-    });
-    el.addEventListener("pointercancel", () => (start = null));
   }
 
   setProps(id: number, changed: Record<string, unknown>) {

@@ -90,6 +90,9 @@ final class XPTreeTests: XCTestCase {
         XCTAssertEqual(XPGesture.direction(dx: 5, dy: -80), "up")
         XCTAssertEqual(XPGesture.direction(dx: 0, dy: 45), "down")
         XCTAssertNil(XPGesture.direction(dx: 30, dy: 30))
+        XCTAssertEqual(XPGesture.follow(axis: "x", dx: -30, dy: 12).x, -30)
+        XCTAssertEqual(XPGesture.follow(axis: "x", dx: -30, dy: 12).y, 0)
+        XCTAssertEqual(XPGesture.follow(axis: "y", dx: -30, dy: 12).y, 12)
     }
 
     func testNumericTextHasNoDecimal() throws {

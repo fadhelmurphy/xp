@@ -36,3 +36,4 @@ export type Batch = { v: number; ops: Op[] };
 //   XP.nextTimer() → ms sampai timer berikutnya (-1 = tidak ada); XP.tick() → jalankan timer yang jatuh tempo
 //   XP.snapshot() → JSON state useState, untuk XP.mount di bundle baru (reload saat development)
 // Event bawaan: onPress(), onChangeText(text), onRequestClose(), onSwipe("left" | "right" | "up" | "down")
+// Prop dragAxis ("x" | "y"): host menggeser node mengikuti jari tanpa memanggil JS.
