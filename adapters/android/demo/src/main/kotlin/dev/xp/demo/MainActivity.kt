@@ -42,6 +42,9 @@ class MainActivity : ComponentActivity() {
 
                     // Komponen yang sama dengan yang dipakai app Next.js.
                     key(reload) {
+                        XPView(base = BuildConfig.XP_URL, name = "promo-slider")
+                    }
+                    key(reload) {
                         XPView(
                             base = BuildConfig.XP_URL,
                             name = "promo-modal",

@@ -40,6 +40,43 @@ export default function PromoModal({ title }: { title: string }) {
 - Hanya boleh memakai primitive: `View`, `Text`, `Image`, `Pressable`, `ScrollView`, `TextInput`, `Modal`. Tag HTML ditolak oleh TypeScript.
 - Di device tidak ada `document`, `window`, `fetch`, maupun `Intl`. Build memberi peringatan kalau bundle native memakainya.
 
+## Contoh komponen
+
+Ada di folder [`examples/`](examples). Keduanya hanya memakai primitive dan `style`, jadi jalan sama di web, Android, dan iOS.
+
+| Komponen | Isi |
+|---|---|
+| [`promo-modal`](examples/promo-modal.tsx) | Kartu promo + modal pendaftaran: state, kondisional, tombol nonaktif, hitung total |
+| [`promo-slider`](examples/promo-slider.tsx) | Slider promo: tombol ‹ ›, titik indikator yang bisa diklik, berputar di ujung, slide bisa diganti lewat props |
+
+![Demo promo-slider di app Next.js](docs/demo-slider.gif)
+
+```tsx
+import { Pressable, Text, View, useState } from "@xp/runtime";
+
+export default function PromoSlider({ slides = DEFAULT_SLIDES }: Props) {
+  const [index, setIndex] = useState(0);
+  const active = Math.min(index, slides.length - 1);
+  const current = slides[active];
+  return (
+    <View style={{ gap: 12 }}>
+      <View style={{ height: 160, padding: 20, borderRadius: 16, justifyContent: "flex-end", backgroundColor: current.color }}>
+        <Text style={{ color: "#FFFFFF", fontSize: 22, fontWeight: "700" }}>{current.title}</Text>
+      </View>
+      {/* tombol ‹ ›, titik indikator, penghitung: lihat examples/promo-slider.tsx */}
+    </View>
+  );
+}
+```
+
+Dipakai seperti komponen lain, dengan slide bawaan atau slide dari app:
+```tsx
+<PromoSlider />
+<PromoSlider slides={[{ title: "Promo Oktober", subtitle: "Diskon 20%", color: "#CF222E" }]} />
+```
+
+Slider ini berpindah lewat tombol dan titik. Geser dengan jari (swipe) belum didukung, karena butuh mode paging di `ScrollView` yang belum ada di runtime.
+
 ## Konsumen web: Next.js (`@xp/next`)
 
 ![Demo Next.js: komponen promo-modal dimuat dari URL, SSR, lalu modal dan perhitungan total jalan di browser](docs/demo-next.gif)

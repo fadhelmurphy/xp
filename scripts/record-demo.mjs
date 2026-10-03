@@ -1,6 +1,7 @@
 // Merekam demo app konsumen web lalu menyimpannya sebagai GIF.
 //
 //   APP_URL=http://localhost:3300 OUT=docs/demo-next.gif node scripts/record-demo.mjs
+//   SCENARIO=slider APP_URL=http://localhost:3300 OUT=docs/demo-slider.gif node scripts/record-demo.mjs
 //
 // Butuh: remote (`npm run serve`) dan app konsumen sudah jalan, Chromium, dan ffmpeg.
 // CHROME=/path/ke/chrome kalau Chromium tidak ada di lokasi default Playwright.
@@ -12,7 +13,8 @@ import { chromium } from "playwright-core";
 
 const APP = process.env.APP_URL ?? "http://localhost:3300";
 const OUT = process.env.OUT ?? "docs/demo.gif";
-const SIZE = { width: 480, height: 440 };
+const SCENARIO = process.env.SCENARIO ?? "modal";
+const SIZE = { width: 480, height: 600 };
 
 // Kursor + efek klik, supaya interaksi terlihat di rekaman.
 const CURSOR = `
@@ -55,13 +57,26 @@ const trimStart = (Date.now() - started) / 1000; // buang frame kosong saat hala
 await page.mouse.move(mouse.x, mouse.y);
 await pause(900);
 
-await tap("open");
-await pause(500);
-await tap("plus");
-await tap("plus");
-await pause(1400); // total & "Kuota penuh"
-await tap("close");
-await pause(900);
+if (SCENARIO === "slider") {
+  await tap("next");
+  await pause(300);
+  await tap("next");
+  await pause(300);
+  await tap("next"); // berputar ke slide pertama
+  await pause(400);
+  await tap("dot-2");
+  await pause(400);
+  await tap("prev");
+  await pause(900);
+} else {
+  await tap("open");
+  await pause(500);
+  await tap("plus");
+  await tap("plus");
+  await pause(1400); // total & "Kuota penuh"
+  await tap("close");
+  await pause(900);
+}
 
 await context.close(); // video baru ditulis saat context ditutup
 await browser.close();

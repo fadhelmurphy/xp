@@ -42,6 +42,17 @@ await page.getByTestId("close").click();
 await dialog.waitFor({ state: "hidden" });
 step("tutup modal");
 
+// Slider: komponen kedua di halaman yang sama.
+assert.equal(await page.getByTestId("slide-title").textContent(), "IELTS Intensif");
+await page.getByTestId("next").click();
+await page.getByTestId("next").click();
+assert.equal(await page.getByTestId("slide-title").textContent(), "Speaking Club");
+await page.getByTestId("next").click(); // berputar ke awal
+assert.equal(await page.getByTestId("counter").textContent(), "1 / 3");
+await page.getByTestId("dot-1").click();
+assert.equal(await page.getByTestId("slide-title").textContent(), "TOEFL Prep");
+step("slider: tombol ‹ ›, titik indikator, dan putaran jalan");
+
 // 3. Tim komponen deploy perubahan → app konsumen ikut berubah TANPA rebuild.
 const src = "examples/promo-modal.tsx";
 const original = await readFile(src, "utf8");

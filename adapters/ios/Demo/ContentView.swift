@@ -16,6 +16,9 @@ struct ContentView: View {
                     .font(.caption)
                     .foregroundColor(.secondary)
 
+                XPView(base: base, name: "promo-slider")
+                    .id("slider-\(reload)")
+
                 XPView(base: base, name: "promo-modal", props: [
                     "title": "Kelas IELTS",
                     "price": 150000,
