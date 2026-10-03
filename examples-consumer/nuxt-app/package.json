@@ -8,8 +8,8 @@
     "start": "node .output/server/index.mjs"
   },
   "dependencies": {
-    "@xp/nuxt": "file:../../adapters/nuxt/xp-nuxt-0.2.0.tgz",
-    "@xp/vite": "file:../../adapters/vite/xp-vite-0.2.0.tgz",
+    "@xp/nuxt": "file:../../adapters/nuxt/xp-nuxt-0.3.0.tgz",
+    "@xp/vite": "file:../../adapters/vite/xp-vite-0.3.0.tgz",
     "nuxt": "^4.5.2",
     "vue": "^3.5.43"
   },

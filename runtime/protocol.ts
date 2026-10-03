@@ -32,4 +32,7 @@ export type Batch = { v: number; ops: Op[] };
 
 // Arah sebaliknya (host → runtime):
 //   XP.dispatch(handlerKey: string, argsJson: string)  → memanggil handler
-//   XP.mount(propsJson) / XP.update(propsJson) / XP.unmount()
+//   XP.mount(propsJson, snapshotJson?) / XP.update(propsJson) / XP.unmount()
+//   XP.nextTimer() → ms sampai timer berikutnya (-1 = tidak ada); XP.tick() → jalankan timer yang jatuh tempo
+//   XP.snapshot() → JSON state useState, untuk XP.mount di bundle baru (reload saat development)
+// Event bawaan: onPress(), onChangeText(text), onRequestClose(), onSwipe("left" | "right" | "up" | "down")

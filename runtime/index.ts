@@ -61,10 +61,15 @@ export type Entering = {
 type Children = { children?: unknown };
 type Base = { style?: Style; testID?: string; entering?: Entering };
 
-export type ViewProps = Base & Children;
+/** Arah geser jari (atau mouse di web) yang cukup jauh, lihat `onSwipe`. */
+export type SwipeDirection = "left" | "right" | "up" | "down";
+/** Dipanggil saat pengguna menggeser elemen minimal 40 px ke satu arah. */
+type Swipe = { onSwipe?: (direction: SwipeDirection) => void };
+
+export type ViewProps = Base & Children & Swipe;
 export type TextProps = Base & Children & { numberOfLines?: number };
 export type ImageProps = Base & { src: string; alt?: string };
-export type PressableProps = Base & Children & { onPress?: () => void; disabled?: boolean };
+export type PressableProps = Base & Children & Swipe & { onPress?: () => void; disabled?: boolean };
 export type ScrollViewProps = Base & Children & { horizontal?: boolean };
 export type TextInputProps = Base & {
   value?: string;

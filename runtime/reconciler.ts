@@ -17,6 +17,8 @@ type HostInst = {
   type: string;
   id: number;
   key: string | null;
+  /** Posisi di tree ("View#0/Counter#1"), dipakai untuk menyimpan state saat reload (HMR). */
+  path: string;
   props: Props;
   children: Inst[];
   lastIds: number[];
@@ -28,6 +30,9 @@ type CompInst = {
   kind: "comp";
   type: ComponentFn;
   key: string | null;
+  path: string;
+  /** State dari snapshot sebelum reload: indeks hook → nilai useState. */
+  restore?: Record<string, unknown>;
   props: Props;
   children: Inst[];
   hostParent: HostInst;
@@ -48,7 +53,11 @@ type RootCtx = {
   flushId: number;
   effects: Hook[];
   runEffects: boolean;
+  restore: Snapshot | null;
 };
+
+/** State useState setiap komponen, per posisi di tree. Harus bisa di-JSON-kan. */
+export type Snapshot = Record<string, Record<string, unknown>>;
 
 export const TEXT = "#text";
 
@@ -90,7 +99,13 @@ export function useState<T>(init: T | (() => T)): [T, (v: T | ((prev: T) => T)) 
   const comp = current!;
   const h = nextHook();
   if (!("value" in h)) {
-    h.value = typeof init === "function" ? (init as () => T)() : init;
+    const saved = comp.restore;
+    const i = String(hookIndex - 1);
+    const initial = typeof init === "function" ? (init as () => T)() : init;
+    // Nilai lama dipakai hanya kalau jenisnya sama (komponen di posisi itu bisa saja sudah berubah).
+    const keep = saved && i in saved && (initial == null || typeof saved[i] === typeof initial);
+    h.value = keep ? (saved[i] as T) : initial;
+    h.state = true;
     h.set = (v: T | ((p: T) => T)) => {
       const next = typeof v === "function" ? (v as (p: T) => T)(h.value) : v;
       if (Object.is(next, h.value)) return;
@@ -171,19 +186,22 @@ function isPlainEqual(a: unknown, b: unknown): boolean {
   return ka.length === kb.length && ka.every((k) => Object.is((a as any)[k], (b as any)[k]));
 }
 
-function mount(root: RootCtx, v: VNode, hostParent: HostInst, depth: number): Inst {
+// Nama fungsi komponen tidak dipakai: bundle di-minify, jadi namanya bisa berubah antar build.
+const segment = (v: VNode, index: number) => `${typeof v.type === "string" ? v.type : "C"}#${v.key ?? index}`;
+
+function mount(root: RootCtx, v: VNode, hostParent: HostInst, depth: number, path: string): Inst {
   if (typeof v.type === "string") {
-    const inst: HostInst = { kind: "host", type: v.type, id: root.nextId++, key: v.key, props: v.props, children: [], lastIds: [] };
+    const inst: HostInst = { kind: "host", type: v.type, id: root.nextId++, key: v.key, path, props: v.props, children: [], lastIds: [] };
     root.host.create(inst.id, v.type);
     const init = propsDiff({}, v.props);
     if (init) root.host.setProps(inst.id, init);
-    inst.children = reconcile(root, [], normalize(v.props.children), inst, depth + 1);
+    inst.children = reconcile(root, [], normalize(v.props.children), inst, depth + 1, path);
     syncChildren(root, inst);
     return inst;
   }
   const inst: CompInst = {
-    kind: "comp", type: v.type, key: v.key, props: v.props, children: [], hostParent,
-    hooks: [], depth, unmounted: false, renderedIn: -1, root,
+    kind: "comp", type: v.type, key: v.key, path, props: v.props, children: [], hostParent,
+    hooks: [], depth, unmounted: false, renderedIn: -1, root, restore: root.restore?.[path],
   };
   renderComp(root, inst);
   return inst;
@@ -194,7 +212,7 @@ function update(root: RootCtx, inst: Inst, v: VNode, depth: number) {
     const changed = propsDiff(inst.props, v.props);
     if (changed) root.host.setProps(inst.id, changed);
     inst.props = v.props;
-    inst.children = reconcile(root, inst.children, normalize(v.props.children), inst, depth + 1);
+    inst.children = reconcile(root, inst.children, normalize(v.props.children), inst, depth + 1, inst.path);
     syncChildren(root, inst);
   } else {
     inst.props = v.props;
@@ -210,7 +228,7 @@ function renderComp(root: RootCtx, inst: CompInst) {
     const out = inst.type === Fragment ? inst.props.children : inst.type(inst.props);
     if (out instanceof Promise) throw new Error("Komponen async tidak didukung");
     inst.renderedIn = root.flushId;
-    inst.children = reconcile(root, inst.children, normalize(out), inst.hostParent, inst.depth + 1);
+    inst.children = reconcile(root, inst.children, normalize(out), inst.hostParent, inst.depth + 1, inst.path);
   } finally {
     current = prev;
     hookIndex = prevIndex;
@@ -228,21 +246,21 @@ function unmount(root: RootCtx, inst: Inst) {
   }
 }
 
-function reconcile(root: RootCtx, old: Inst[], next: VNode[], hostParent: HostInst, depth: number): Inst[] {
+function reconcile(root: RootCtx, old: Inst[], next: VNode[], hostParent: HostInst, depth: number, path: string): Inst[] {
   const byKey = new Map<string, Inst>();
   const unkeyed: Inst[] = [];
   for (const o of old) (o.key != null ? byKey.set(o.key, o) : unkeyed.push(o));
 
   const used = new Set<Inst>();
   let u = 0;
-  const result = next.map((v) => {
+  const result = next.map((v, i) => {
     const match = v.key != null ? byKey.get(v.key) : unkeyed[u++];
     if (match && !used.has(match) && match.type === v.type) {
       used.add(match);
       update(root, match, v, depth);
       return match;
     }
-    return mount(root, v, hostParent, depth);
+    return mount(root, v, hostParent, depth, `${path}/${segment(v, i)}`);
   });
   for (const o of old) if (!used.has(o)) unmount(root, o);
   return result;
@@ -290,15 +308,18 @@ function commit(root: RootCtx) {
 // --- API publik ---
 
 export function createRoot(host: Host, opts: { effects?: boolean } = {}) {
-  const container: HostInst = { kind: "host", type: "#root", id: ROOT_ID, key: null, props: {}, children: [], lastIds: [] };
+  const container: HostInst = { kind: "host", type: "#root", id: ROOT_ID, key: null, path: "", props: {}, children: [], lastIds: [] };
   const root: RootCtx = {
     host, nextId: 1, dirty: new Set(), scheduled: false, flushId: 0, effects: [],
-    runEffects: opts.effects ?? true,
+    runEffects: opts.effects ?? true, restore: null,
   };
   return {
-    render(element: unknown) {
+    /** `restore`: snapshot dari versi sebelumnya; state komponen di posisi yang sama dipakai lagi. */
+    render(element: unknown, restore?: Snapshot | null) {
       root.flushId++;
-      container.children = reconcile(root, container.children, normalize(element), container, 0);
+      root.restore = restore ?? null;
+      container.children = reconcile(root, container.children, normalize(element), container, 0, "");
+      root.restore = null;
       syncChildren(root, container);
       commit(root);
     },
@@ -309,6 +330,27 @@ export function createRoot(host: Host, opts: { effects?: boolean } = {}) {
         if (i > 50) throw new Error("Terlalu banyak update berantai (setState di dalam effect?)");
         flush(root);
       }
+    },
+    /** State useState semua komponen yang sedang tampil (yang bisa di-JSON-kan saja). */
+    snapshot(): Snapshot {
+      const out: Snapshot = {};
+      const walk = (inst: Inst) => {
+        if (inst.kind === "comp") {
+          const states: Record<string, unknown> = {};
+          inst.hooks.forEach((h, i) => {
+            if (!h.state || h.value === undefined) return;
+            try {
+              states[i] = JSON.parse(JSON.stringify(h.value ?? null));
+            } catch {
+              // nilai yang tidak bisa di-JSON-kan dilewati; komponen memakai nilai awal
+            }
+          });
+          if (Object.keys(states).length) out[inst.path] = states;
+        }
+        inst.children.forEach(walk);
+      };
+      container.children.forEach(walk);
+      return out;
     },
     unmount() {
       for (const c of container.children) unmount(root, c);

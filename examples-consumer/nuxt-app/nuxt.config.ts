@@ -5,6 +5,8 @@ export default defineNuxtConfig({
     // Komponen dari tim lain, di-host di URL. Ganti dengan domain/CDN kalian.
     remotes: { ui: process.env.XP_UI_URL ?? "http://localhost:4400" },
     revalidate: 5, // detik; manifest dicek ulang → deploy remote terpakai tanpa rebuild app ini
+    // Opsional: hanya terima manifest yang ditandatangani (xp keygen + xp build --sign).
+    publicKey: process.env.XP_PUBLIC_KEY,
   },
   devtools: { enabled: false },
   telemetry: false,

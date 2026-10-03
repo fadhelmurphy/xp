@@ -2,15 +2,19 @@
 // CLI xp.
 //   npx github:fadhelmurphy/xp build              → pilih komponen & target secara interaktif
 //   npx github:fadhelmurphy/xp build src -t web   → tanpa pertanyaan
+//   npx github:fadhelmurphy/xp dev                → build ulang otomatis + reload di browser & device
 import path from "node:path";
 import { discover, plan, runBuild, TARGETS } from "./build.mjs";
+import { keygen, loadPrivateKey, publicKeyOf } from "./sign.mjs";
 
 const HELP = `xp: tulis komponen sekali, muat lewat URL di web, iOS, dan Android
 
 Pemakaian:
   xp build [folder] [opsi]      build komponen (default folder: src)
+  xp dev [folder] [opsi]        build, sajikan, dan build ulang setiap file berubah
   xp list [folder]              daftar komponen beserta jenis dan target yang bisa dipakai
   xp serve [dist] [--port n]    sajikan hasil build (CORS + cache header)
+  xp keygen [folder]            buat kunci untuk menandatangani manifest
 
 Opsi build:
   -t, --target <target>   auto | web | crossplatform (default: auto)
@@ -21,6 +25,9 @@ Opsi build:
       --out <folder>      folder hasil (default: dist)
       --clean             kosongkan folder hasil dulu (default: hanya komponen yang di-build yang diganti)
   -y, --yes               jangan bertanya; pakai opsi yang diberikan
+      --sign <key.pem>    tandatangani manifest (atau isi env XP_SIGNING_KEY)
+
+Opsi dev: --target, --out, --sign, --port (default 4400)
 
 Tanpa --target dan --only di terminal interaktif, xp menanyakan komponen dan target.`;
 
@@ -32,7 +39,7 @@ const KIND = {
 };
 
 function parseArgs(argv) {
-  const opts = { positional: [], target: null, only: null, out: "dist", clean: false, yes: false, port: 4400, help: false };
+  const opts = { positional: [], target: null, only: null, out: "dist", clean: false, yes: false, port: 4400, sign: null, help: false };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     const value = () => {
@@ -47,6 +54,8 @@ function parseArgs(argv) {
     else if (a === "--out") opts.out = value();
     else if (a.startsWith("--out=")) opts.out = a.slice(6);
     else if (a === "--port") opts.port = Number(value());
+    else if (a === "--sign") opts.sign = value();
+    else if (a.startsWith("--sign=")) opts.sign = a.slice(7);
     else if (a === "--clean") opts.clean = true;
     else if (a === "-y" || a === "--yes") opts.yes = true;
     else if (a === "-h" || a === "--help") opts.help = true;
@@ -135,7 +144,8 @@ async function cmdBuild(opts) {
   console.log(`\nxp build · target ${target} · ${jobs.length} komponen → ${rel}/\n`);
   for (const s of skipped) console.log(`- ${s.name.padEnd(16)} ${s.kind.padEnd(7)} dilewati: ${s.reason}`);
 
-  const { results } = await runBuild({ srcDir, outDir, jobs, clean: opts.clean });
+  const signingKey = await loadPrivateKey(opts.sign);
+  const { results } = await runBuild({ srcDir, outDir, jobs, clean: opts.clean, signingKey });
   for (const r of results) {
     if (r.ok) {
       console.log(`✓ ${r.name.padEnd(16)} ${r.kind.padEnd(7)} ${summary(r)}`);
@@ -145,7 +155,8 @@ async function cmdBuild(opts) {
     }
   }
   const failed = results.filter((r) => !r.ok).length;
-  const done = `${results.length - failed}/${results.length} berhasil · manifest: ${rel}/manifest.json`;
+  const signed = signingKey ? ` · ditandatangani (kunci publik ${publicKeyOf(signingKey).slice(-12)})` : "";
+  const done = `${results.length - failed}/${results.length} berhasil · manifest: ${rel}/manifest.json${signed}`;
   if (prompts) (failed ? prompts.outro(`Selesai dengan error. ${done}`) : prompts.outro(done));
   else console.log(`\n${done}`);
   if (failed) process.exitCode = 1;
@@ -166,6 +177,25 @@ async function main() {
   }
   if (cmd === "build") return cmdBuild(opts);
   if (cmd === "list") return cmdList(opts);
+  if (cmd === "dev") {
+    const { dev } = await import("./dev.mjs");
+    await dev({
+      srcDir: path.resolve(opts.positional[0] ?? "src"),
+      outDir: path.resolve(opts.out),
+      port: opts.port,
+      target: opts.target ?? "auto",
+      signingKey: await loadPrivateKey(opts.sign),
+    });
+    return;
+  }
+  if (cmd === "keygen") {
+    const { keyFile, pubFile, publicKey } = await keygen(path.resolve(opts.positional[0] ?? "."));
+    console.log(`✓ kunci privat: ${path.relative(process.cwd(), keyFile)}  (rahasia, jangan di-commit)`);
+    console.log(`✓ kunci publik: ${path.relative(process.cwd(), pubFile)}\n\n${publicKey}\n`);
+    console.log("Build: xp build --sign xp-signing-key.pem");
+    console.log("Pasang kunci publik di konsumen: publicKey (Next/Nuxt), XPView(publicKey = ...) di Android/iOS.");
+    return;
+  }
   if (cmd === "serve") {
     const { serve } = await import("./serve.mjs");
     serve(path.resolve(opts.positional[0] ?? "dist"), opts.port);

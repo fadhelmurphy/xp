@@ -22,3 +22,6 @@ local.properties
 .idea/
 *.iml
 .kotlin/
+
+# kunci signing (xp keygen)
+xp-signing-key.pem

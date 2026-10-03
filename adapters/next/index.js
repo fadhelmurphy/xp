@@ -16,9 +16,10 @@ async function fetchText(url) {
 
 /**
  * @param {import("next").NextConfig | Function} nextConfig
- * @param {{ remotes: Record<string, string>, revalidate?: number, dir?: string }} options
+ * @param {{ remotes: Record<string, string>, revalidate?: number, dir?: string, publicKey?: string }} options
+ *   publicKey: kunci publik dari `xp keygen`; manifest yang tidak ditandatangani kunci ini ditolak
  */
-export function withXP(nextConfig = {}, { remotes, revalidate = 30, dir = ".xp" } = {}) {
+export function withXP(nextConfig = {}, { remotes, revalidate = 30, dir = ".xp", publicKey } = {}) {
   if (!remotes || !Object.keys(remotes).length) throw new Error("withXP: isi `remotes`, mis. { ui: 'https://ui.kamu/xp' }");
 
   return async (phase, ctx) => {
@@ -56,7 +57,7 @@ export function withXP(nextConfig = {}, { remotes, revalidate = 30, dir = ".xp" 
           file,
           `// Dibuat otomatis oleh @xp/next. Jangan diedit.\n` +
             `import { remote } from "@xp/next/runtime";\n` +
-            `export default remote(${JSON.stringify(url)}, ${JSON.stringify(name)}, { revalidate: ${revalidate} });\n`,
+            `export default remote(${JSON.stringify(url)}, ${JSON.stringify(name)}, ${JSON.stringify({ revalidate, publicKey })});\n`,
         );
         alias[spec] = file;
 

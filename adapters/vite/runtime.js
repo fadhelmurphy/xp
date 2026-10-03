@@ -1,5 +1,7 @@
 // Runtime isomorfik (server & browser), tanpa framework.
 // Dipakai oleh wrapper per framework (Vue, Svelte, ...) yang dibuat plugin xp().
+import { verifyManifest } from "./verify.js";
+
 const PROTOCOL = 1;
 const manifests = new Map(); // base → { data, expires }
 const serverModules = new Map(); // src → exports
@@ -17,14 +19,23 @@ async function sha256(text) {
   return [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
-/** Manifest di-cache `revalidate` detik. Remote mati → pakai versi terakhir yang ada. */
-export async function getManifest(base, revalidate = 30) {
+/**
+ * Manifest di-cache `revalidate` detik. Remote mati → pakai versi terakhir yang ada.
+ * Dengan `publicKey`, manifest harus ditandatangani kunci itu (`xp build --sign`).
+ */
+export async function getManifest(base, revalidate = 30, publicKey = null) {
   const hit = manifests.get(base);
   if (hit && hit.expires > Date.now()) return hit.data;
   try {
     const res = await fetch(`${base}/manifest.json`, { cache: "no-store" });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const data = await res.json();
+    const text = await res.text();
+    if (publicKey) {
+      const sig = await fetch(`${base}/manifest.sig`, { cache: "no-store" });
+      if (!sig.ok) throw new Error(`manifest.sig → HTTP ${sig.status} (remote belum ditandatangani?)`);
+      if (!(await verifyManifest(text, await sig.text(), publicKey))) throw new Error("tanda tangan tidak valid, remote ditolak");
+    }
+    const data = JSON.parse(text);
     if (data.protocol !== PROTOCOL) throw new Error(`protokol ${data.protocol} tidak didukung (adapter: ${PROTOCOL})`);
     manifests.set(base, { data, expires: Date.now() + revalidate * 1000 });
     return data;
@@ -38,12 +49,12 @@ export async function getManifest(base, revalidate = 30) {
 }
 
 /** Server: ambil bundle (diverifikasi sha256) lalu render HTML. */
-export async function renderRemote(base, name, props, revalidate = 30) {
-  let entry = (await getManifest(base, revalidate)).components?.[name];
+export async function renderRemote(base, name, props, revalidate = 30, publicKey = null) {
+  let entry = (await getManifest(base, revalidate, publicKey)).components?.[name];
   if (!entry) {
     // Manifest di cache bisa lebih lama dari komponen yang di-import: ambil ulang sekali.
     manifests.delete(base);
-    entry = (await getManifest(base, revalidate)).components?.[name];
+    entry = (await getManifest(base, revalidate, publicKey)).components?.[name];
   }
   if (!entry) throw new Error(`[xp] komponen "${name}" tidak ada di ${base}/manifest.json`);
   // Browser memuat bundle `web`. Server memakai bundle `ssr` kalau ada (komponen React/Vue/Svelte).

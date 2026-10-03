@@ -7,6 +7,9 @@
 //     Ini yang dipakai SDK Android (zipline QuickJs) dan iOS.
 //
 // SDK → JS: XP.mount(propsJson), XP.update(propsJson), XP.dispatch(handlerKey, argsJson), XP.unmount()
+// Reload (dev): XP.snapshot() → JSON state, lalu XP.mount(propsJson, snapshotJson) di bundle baru.
+// Timer: XP.nextTimer() → ms sampai timer berikutnya (-1 = tidak ada), XP.tick() → jalankan yang jatuh tempo.
+import { nextTimerDelay, runDueTimers } from "./timers";
 import { jsx, type ComponentFn } from "../jsx-runtime";
 import { PROTOCOL_VERSION, type Batch, type Op } from "../protocol";
 import { createRoot, type Host } from "../reconciler";
@@ -89,9 +92,13 @@ export function installNative(Component: ComponentFn) {
 
   g.XP = {
     protocol: PROTOCOL_VERSION,
-    mount(propsJson = "{}") {
-      root.render(jsx(Component, JSON.parse(propsJson)));
+    /** `snapshotJson`: hasil XP.snapshot() dari bundle sebelumnya (reload saat development). */
+    mount(propsJson = "{}", snapshotJson = "null") {
+      root.render(jsx(Component, JSON.parse(propsJson)), JSON.parse(snapshotJson));
       return done();
+    },
+    snapshot() {
+      return JSON.stringify(root.snapshot());
     },
     update(propsJson = "{}") {
       root.render(jsx(Component, JSON.parse(propsJson)));
@@ -105,6 +112,13 @@ export function installNative(Component: ComponentFn) {
       const fn = host.handlers.get(handlerKey);
       if (fn) fn(...JSON.parse(argsJson)); // node sudah dihapus: abaikan event basi
       return done();
+    },
+    tick() {
+      runDueTimers();
+      return done();
+    },
+    nextTimer() {
+      return nextTimerDelay();
     },
   };
 }

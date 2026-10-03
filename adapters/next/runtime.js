@@ -2,6 +2,7 @@
 // lalu serahkan ke island client untuk hydrate & interaksi.
 import { createElement } from "react";
 import { XPIsland } from "./island.js";
+import { verifyManifest } from "./verify.js";
 
 const modules = new Map(); // src (ber-hash) → exports; aman di-cache selamanya
 
@@ -25,21 +26,44 @@ async function loadModule(src, expectedHash) {
   return module.exports;
 }
 
-async function getManifest(base, init, query = "") {
+async function fetchManifest(base, init, query, publicKey) {
   const res = await fetch(`${base}/manifest.json${query}`, init);
   if (!res.ok) throw new Error(`[xp] ${base}/manifest.json → HTTP ${res.status}`);
-  return res.json();
+  const text = await res.text();
+  if (publicKey) {
+    const sig = await fetch(`${base}/manifest.sig${query}`, init);
+    if (!sig.ok) throw new Error(`[xp] ${base}/manifest.sig → HTTP ${sig.status} (remote belum ditandatangani?)`);
+    if (!(await verifyManifest(text, await sig.text(), publicKey))) return null;
+  }
+  return JSON.parse(text);
 }
 
-export function remote(base, name, { revalidate = 30 } = {}) {
+// URL dibedakan supaya tidak di-dedupe dengan fetch pertama (request memoization Next).
+const fresh = () => [{ cache: "no-store" }, `?t=${Date.now()}`];
+
+async function getManifest(base, init, publicKey) {
+  // Manifest dan manifest.sig di-cache terpisah; tepat setelah deploy keduanya bisa beda versi.
+  // Tanda tangan tidak cocok → ambil ulang keduanya tanpa cache sebelum menolak.
+  const manifest = (await fetchManifest(base, init, "", publicKey)) ?? (await fetchManifest(base, ...fresh(), publicKey));
+  if (!manifest) throw new Error(`[xp] tanda tangan ${base}/manifest.json tidak valid, remote ditolak`);
+  return manifest;
+}
+
+/**
+ * @param {string} base URL remote
+ * @param {string} name nama komponen
+ * @param {{ revalidate?: number, publicKey?: string }} options publicKey: hanya terima manifest yang
+ *   ditandatangani kunci ini (`xp build --sign`)
+ */
+export function remote(base, name, { revalidate = 30, publicKey } = {}) {
   async function XPRemote(props) {
     // Manifest di-revalidate berkala → deploy remote terbaru terpakai tanpa rebuild app ini.
-    let entry = (await getManifest(base, { next: { revalidate } })).components?.[name];
+    let entry = (await getManifest(base, { next: { revalidate } }, publicKey)).components?.[name];
     if (!entry) {
       // Manifest di cache bisa lebih lama dari komponen yang di-import (mis. komponen baru):
       // ambil ulang tanpa cache sebelum menyerah.
-      // URL dibedakan supaya tidak di-dedupe dengan fetch pertama (request memoization Next).
-      entry = (await getManifest(base, { cache: "no-store" }, `?t=${Date.now()}`)).components?.[name];
+      const [init, query] = fresh();
+      entry = (await fetchManifest(base, init, query, publicKey))?.components?.[name];
     }
     if (!entry) throw new Error(`[xp] komponen "${name}" tidak ada di ${base}/manifest.json`);
 

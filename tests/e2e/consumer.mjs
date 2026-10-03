@@ -23,8 +23,22 @@ assert.match(html, /role="dialog"/);
 step("SSR: komponen remote ada di HTML server");
 
 // 2. Hydrate + interaksi di browser.
+// Simpan elemen hasil SSR sebelum JS jalan, untuk memastikan hydrate memakai elemen yang sama.
+await page.addInitScript(() => {
+  document.addEventListener("DOMContentLoaded", () => {
+    window.__ssr = { open: document.querySelector('[data-testid="open"]'), slide: document.querySelector('[data-testid="slide"]') };
+  });
+});
 await page.goto(APP);
 await page.waitForSelector('[data-xp-ready="true"]');
+await page.waitForFunction(() => document.querySelectorAll('[data-xp-ready="true"]').length >= 2);
+assert.ok(
+  await page.evaluate(
+    () => window.__ssr.open === document.querySelector('[data-testid="open"]') && window.__ssr.slide === document.querySelector('[data-testid="slide"]'),
+  ),
+  "hydrate harus memakai elemen hasil SSR, bukan membuat ulang",
+);
+step("hydrate memakai elemen DOM hasil SSR (tidak dirender ulang)");
 const dialog = page.locator('[role="dialog"]');
 assert.equal(await dialog.isVisible(), false);
 await page.getByTestId("open").click();
@@ -52,6 +66,15 @@ assert.equal(await page.getByTestId("counter").textContent(), "1 / 3");
 await page.getByTestId("dot-1").click();
 assert.equal(await page.getByTestId("slide-title").textContent(), "TOEFL Prep");
 step("slider: tombol ‹ ›, titik indikator, dan putaran jalan");
+
+// Geser dengan mouse (pointer event sungguhan): ke kiri → slide berikutnya.
+const box = await page.getByTestId("slide").boundingBox();
+await page.mouse.move(box.x + box.width * 0.8, box.y + box.height / 2);
+await page.mouse.down();
+await page.mouse.move(box.x + box.width * 0.2, box.y + box.height / 2, { steps: 8 });
+await page.mouse.up();
+await page.waitForFunction(() => document.querySelector('[data-testid="slide-title"]').textContent === "Speaking Club");
+step("slider: geser ke kiri → slide berikutnya (onSwipe)");
 
 // Komponen web dari framework lain (React, Vue, Svelte), di halaman yang sama.
 assert.match(html, /Suka kelas ini\?/, "React di-SSR");

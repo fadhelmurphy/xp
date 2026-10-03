@@ -1,12 +1,12 @@
 // Modul Nuxt: cukup daftarkan di nuxt.config.
 //   modules: ["@xp/nuxt"],
-//   xp: { remotes: { ui: "https://cdn.kamu/xp" }, revalidate: 30 }
+//   xp: { remotes: { ui: "https://cdn.kamu/xp" }, revalidate: 30, publicKey: "MFkw..." }
 import { addVitePlugin, defineNuxtModule } from "@nuxt/kit";
 import { syncRemotes, xp } from "@xp/vite";
 
 /** Wrapper Vue untuk satu komponen remote. Props diteruskan apa adanya (harus bisa di-JSON-kan). */
 const vue = {
-  code: ({ base, name, revalidate }) => `
+  code: ({ base, name, revalidate, publicKey }) => `
 import { defineComponent, h, onBeforeUnmount, onMounted, onUpdated, ref } from "vue";
 import { useAsyncData } from "#app";
 import { loadClient, plainProps, renderRemote } from "@xp/vite/runtime";
@@ -51,7 +51,7 @@ export default defineComponent({
 
     // SSR: render HTML di server. Hasilnya ikut payload Nuxt, jadi client tidak render ulang.
     const { data, error } = await useAsyncData("xp:" + NAME + ":" + initial, () =>
-      renderRemote(BASE, NAME, JSON.parse(initial), ${revalidate}),
+      renderRemote(BASE, NAME, JSON.parse(initial), ${revalidate}, ${JSON.stringify(publicKey ?? null)}),
     );
     if (error.value) console.error("[xp]", error.value);
     result = data.value;
@@ -70,7 +70,7 @@ export default defineComponent({
 
 export default defineNuxtModule({
   meta: { name: "@xp/nuxt", configKey: "xp" },
-  defaults: { remotes: {}, revalidate: 30, dir: ".xp" },
+  defaults: { remotes: {}, revalidate: 30, dir: ".xp", publicKey: null },
   async setup(options, nuxt) {
     const root = nuxt.options.rootDir;
     // Ambil manifest & tipe sekali saat Nuxt start/build (cache di .xp/ kalau remote mati).

@@ -1,11 +1,16 @@
-// Slider promo: satu slide tampil, pindah lewat tombol ‹ › atau titik indikator.
+// Slider promo: satu slide tampil, pindah lewat tombol ‹ ›, titik indikator, atau geser (swipe).
+// Bisa berganti otomatis lewat prop `autoplay` (ms).
 // Animasi: warna latar & titik aktif bertransisi, konten slide baru masuk dari arah navigasi.
 // Hanya memakai primitive yang ada, jadi jalan sama di web, Android, dan iOS.
-import { Pressable, Text, View, useState, type Style } from "@xp/runtime";
+import { Pressable, Text, View, useEffect, useState, type Style } from "@xp/runtime";
 
 type Slide = { title: string; subtitle: string; color: string };
 
-type Props = { slides?: Slide[] };
+type Props = {
+  slides?: Slide[];
+  /** Ganti slide otomatis setiap sekian ms. 0 = mati. */
+  autoplay?: number;
+};
 
 const DEFAULT_SLIDES: Slide[] = [
   { title: "IELTS Intensif", subtitle: "8 minggu, target band 7", color: "#1F6FEB" },
@@ -24,11 +29,22 @@ const navButton: Style = {
   justifyContent: "center",
 };
 
-export default function PromoSlider({ slides = DEFAULT_SLIDES }: Props) {
+export default function PromoSlider({ slides = DEFAULT_SLIDES, autoplay = 0 }: Props) {
   const [index, setIndex] = useState(0);
   // Arah perpindahan terakhir: 1 = maju (konten masuk dari kanan), -1 = mundur.
   const [direction, setDirection] = useState(1);
   const count = slides.length;
+
+  // Timer diulang setiap slide berganti, jadi navigasi manual juga mereset hitungan autoplay.
+  useEffect(() => {
+    if (!autoplay || count < 2) return;
+    const t = setTimeout(() => {
+      setDirection(1);
+      setIndex((i) => (Math.min(i, count - 1) + 1) % count);
+    }, autoplay);
+    return () => clearTimeout(t);
+  }, [autoplay, index, count]);
+
   if (count === 0) return null;
 
   // Jumlah slide dari app host bisa berkurang; jaga index tetap di dalam rentang.
@@ -43,6 +59,10 @@ export default function PromoSlider({ slides = DEFAULT_SLIDES }: Props) {
     <View style={{ gap: 12 }}>
       <View
         testID="slide"
+        onSwipe={(dir) => {
+          if (dir === "left") go(active + 1, 1);
+          if (dir === "right") go(active - 1, -1);
+        }}
         style={{
           height: 160,
           padding: 20,

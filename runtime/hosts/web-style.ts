@@ -52,6 +52,10 @@ export function styleToCss(type: string, style: Style | undefined, extra: Record
   if (s.borderWidth !== undefined) css["border-style"] = "solid";
   if (type === "ScrollView" && extra.horizontal) css["flex-direction"] = "row";
   if (type === "Modal" && !extra.visible) css.display = "none";
+  if (typeof extra.onSwipe === "function") {
+    css["touch-action"] = "pan-y"; // geser horizontal ditangani onSwipe, scroll vertikal tetap jalan
+    css["user-select"] = "none";
+  }
   if (type === "Text" && typeof extra.numberOfLines === "number" && extra.numberOfLines > 0) {
     css.display = "-webkit-box";
     css["-webkit-box-orient"] = "vertical";

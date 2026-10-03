@@ -16,6 +16,7 @@ import { mkdir, readdir, readFile, rm, stat, writeFile } from "node:fs/promises"
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createPropsReader } from "./props.mjs";
+import { SIGNATURE_FILE, signManifest } from "./sign.mjs";
 import { detectKind, webBuildOptions } from "./web.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -54,7 +55,7 @@ const xpBuilds = {
         import { renderToString } from "@xp/runtime/hosts/html";
         export const protocol = ${PROTOCOL_VERSION};
         export const framework = "xp";
-        export const render = (el, props) => mount(el, C, props);
+        export const render = (el, props, opts) => mount(el, C, props, opts);
         export const renderHTML = (props) => renderToString(C, props);`,
       resolveDir: RUNTIME,
       loader: "tsx",
@@ -67,6 +68,7 @@ const xpBuilds = {
     platform: "neutral",
     stdin: {
       contents: `
+        import "@xp/runtime/hosts/timers";
         import C from ${JSON.stringify(entry)};
         import { installNative } from "@xp/runtime/hosts/native";
         installNative(C);`,
@@ -138,7 +140,7 @@ function formatError(e) {
  * Jalankan build.
  * Build parsial (sebagian komponen) mempertahankan komponen lain di manifest, kecuali `clean`.
  */
-export async function runBuild({ srcDir, outDir, jobs, clean = false, projectDir = process.cwd(), log = console }) {
+export async function runBuild({ srcDir, outDir, jobs, clean = false, projectDir = process.cwd(), signingKey = null }) {
   const manifestPath = path.join(outDir, "manifest.json");
   let manifest = { protocol: PROTOCOL_VERSION, builtAt: "", components: {} };
   if (clean) await rm(outDir, { recursive: true, force: true });
@@ -212,6 +214,10 @@ export async function runBuild({ srcDir, outDir, jobs, clean = false, projectDir
 
   manifest.builtAt = new Date().toISOString();
   manifest.components = Object.fromEntries(Object.entries(manifest.components).sort(([a], [b]) => a.localeCompare(b)));
-  await writeFile(manifestPath, JSON.stringify(manifest, null, 2));
-  return { results, manifest };
+  const text = JSON.stringify(manifest, null, 2);
+  await writeFile(manifestPath, text);
+  // Tanda tangan lama tidak boleh tertinggal: manifest baru tanpa --sign = tanpa manifest.sig.
+  if (signingKey) await writeFile(path.join(outDir, SIGNATURE_FILE), `${signManifest(text, signingKey)}\n`);
+  else await rm(path.join(outDir, SIGNATURE_FILE), { force: true });
+  return { results, manifest, signed: Boolean(signingKey) };
 }
