@@ -53,6 +53,33 @@ await page.getByTestId("dot-1").click();
 assert.equal(await page.getByTestId("slide-title").textContent(), "TOEFL Prep");
 step("slider: tombol ‹ ›, titik indikator, dan putaran jalan");
 
+// Komponen web dari framework lain (React, Vue, Svelte), di halaman yang sama.
+assert.match(html, /Suka kelas ini\?/, "React di-SSR");
+assert.match(html, /Belum dinilai/, "Vue di-SSR");
+assert.match(html, /Berapa lama kelas IELTS\?/, "Svelte di-SSR");
+await page.waitForFunction(() => document.querySelectorAll('[data-xp-ready="true"]').length >= 5);
+
+await page.getByTestId("like").click();
+assert.equal(await page.getByTestId("likes").textContent(), "13");
+step("React (like-button): SSR + hydrate, klik ♥ → 13");
+
+await page.getByTestId("star-4").click();
+assert.equal(await page.getByTestId("rating-label").textContent(), "4 dari 5");
+// .star.on berwarna emas (scoped CSS); tunggu transisi warna 0,15 dtk selesai.
+await page.waitForFunction(() => getComputedStyle(document.querySelector('[data-testid="star-1"]')).color === "rgb(191, 135, 0)", null, { timeout: 2000 });
+step("Vue (rating-stars): SSR + hydrate, klik bintang 4 → \"4 dari 5\", scoped CSS aktif");
+
+assert.equal(await page.getByTestId("faq-answer-0").isVisible(), true);
+await page.getByTestId("faq-1").click();
+await page.getByTestId("faq-answer-1").waitFor({ state: "visible" });
+await page.getByTestId("faq-answer-0").waitFor({ state: "detached" }); // transisi slide selesai
+step("Svelte (faq-list): SSR + hydrate, buka item 2 → item 1 menutup dengan transisi");
+
+const loaded = await page.evaluate(() => performance.getEntriesByType("resource").map((e) => e.name).filter((n) => n.includes(":4400/")));
+assert.ok(!loaded.some((n) => n.includes(".ssr.")), "browser tidak boleh mengunduh bundle SSR");
+assert.ok(!loaded.some((n) => /react|vue|svelte/i.test(n) && !n.includes(".web.")), "tidak ada runtime framework terpisah");
+step(`browser hanya mengunduh bundle web (${loaded.filter((n) => n.endsWith(".js")).length} file), tanpa bundle SSR`);
+
 // 3. Tim komponen deploy perubahan → app konsumen ikut berubah TANPA rebuild.
 const src = "examples/promo-modal.tsx";
 const original = await readFile(src, "utf8");

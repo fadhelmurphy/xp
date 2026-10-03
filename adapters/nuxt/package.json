@@ -1,12 +1,16 @@
 {
   "name": "@xp/nuxt",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Modul Nuxt untuk xp: import komponen dari URL dengan `import X from \"xp:ui/nama\"`",
   "type": "module",
-  "exports": { ".": "./module.js" },
-  "files": ["module.js"],
+  "exports": {
+    ".": "./module.js"
+  },
+  "files": [
+    "module.js"
+  ],
   "peerDependencies": {
-    "@xp/vite": "0.1.x",
+    "@xp/vite": "0.2.x",
     "nuxt": ">=3.10"
   }
 }

@@ -2,6 +2,7 @@
 //
 //   APP_URL=http://localhost:3300 OUT=docs/demo-next.gif node scripts/record-demo.mjs
 //   SCENARIO=slider APP_URL=http://localhost:3300 OUT=docs/demo-slider.gif node scripts/record-demo.mjs
+//   SCENARIO=frameworks HEIGHT=900 APP_URL=http://localhost:3300 OUT=docs/demo-frameworks.gif node scripts/record-demo.mjs
 //
 // Butuh: remote (`npm run serve`) dan app konsumen sudah jalan, Chromium, dan ffmpeg.
 // CHROME=/path/ke/chrome kalau Chromium tidak ada di lokasi default Playwright.
@@ -15,7 +16,7 @@ const APP = process.env.APP_URL ?? "http://localhost:3300";
 const OUT = process.env.OUT ?? "docs/demo.gif";
 const SCENARIO = process.env.SCENARIO ?? "modal";
 const FPS = Number(process.env.FPS ?? 12);
-const SIZE = { width: 480, height: 600 };
+const SIZE = { width: 480, height: Number(process.env.HEIGHT ?? 600) };
 
 // Kursor + efek klik, supaya interaksi terlihat di rekaman.
 const CURSOR = `
@@ -58,7 +59,21 @@ const trimStart = (Date.now() - started) / 1000; // buang frame kosong saat hala
 await page.mouse.move(mouse.x, mouse.y);
 await pause(900);
 
-if (SCENARIO === "slider") {
+if (SCENARIO === "frameworks") {
+  // Komponen React, Vue, dan Svelte di app yang sama.
+  await page.getByTestId("like").scrollIntoViewIfNeeded();
+  await pause(300);
+  await tap("like");
+  await pause(500);
+  await tap("star-2");
+  await pause(300);
+  await tap("star-4");
+  await pause(600);
+  await tap("faq-1");
+  await pause(700);
+  await tap("faq-2");
+  await pause(1000);
+} else if (SCENARIO === "slider") {
   await tap("next");
   await pause(500);
   await tap("next");

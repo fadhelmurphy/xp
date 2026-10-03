@@ -68,7 +68,7 @@ const html = `<!doctype html><meta charset="utf-8">
 </script>`;
 
 // 3. Rekam halaman tadi, ubah jadi GIF.
-const SIZE = { width: 720, height: 440 };
+const SIZE = { width: Number(process.env.WIDTH ?? 820), height: Number(process.env.HEIGHT ?? 470) };
 const videoDir = mkdtempSync(path.join(tmpdir(), "xp-term-"));
 const browser = await chromium.launch({ executablePath: process.env.CHROME ?? "/opt/pw-browsers/chromium" });
 const context = await browser.newContext({ viewport: SIZE, recordVideo: { dir: videoDir, size: SIZE } });

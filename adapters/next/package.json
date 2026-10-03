@@ -1,6 +1,6 @@
 {
   "name": "@xp/next",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Import komponen xp dari URL di Next.js: import X from \"xp:ui/nama\"",
   "type": "module",
   "exports": {
@@ -8,7 +8,11 @@
     "./runtime": "./runtime.js",
     "./island": "./island.js"
   },
-  "files": ["index.js", "runtime.js", "island.js"],
+  "files": [
+    "index.js",
+    "runtime.js",
+    "island.js"
+  ],
   "peerDependencies": {
     "next": ">=14",
     "react": ">=18"

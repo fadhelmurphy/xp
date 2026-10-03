@@ -5,7 +5,7 @@
 import path from "node:path";
 import ts from "typescript";
 
-export function createPropsReader(entries, runtimeDir) {
+export function createPropsReader(entries, runtimeDir, { jsxImportSource = "@xp/runtime" } = {}) {
   const program = ts.createProgram(entries, {
     strict: true,
     noEmit: true,
@@ -14,7 +14,7 @@ export function createPropsReader(entries, runtimeDir) {
     module: ts.ModuleKind.ESNext,
     moduleResolution: ts.ModuleResolutionKind.Bundler,
     jsx: ts.JsxEmit.ReactJSX,
-    jsxImportSource: "@xp/runtime",
+    jsxImportSource,
     baseUrl: path.dirname(runtimeDir),
     paths: {
       "@xp/runtime": [path.join(runtimeDir, "index.ts")],

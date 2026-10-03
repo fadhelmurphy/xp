@@ -43,9 +43,12 @@ export function remote(base, name, { revalidate = 30 } = {}) {
     }
     if (!entry) throw new Error(`[xp] komponen "${name}" tidak ada di ${base}/manifest.json`);
 
+    // Browser memuat bundle `web`. Server memakai bundle `ssr` kalau ada (komponen React/Vue/Svelte),
+    // kalau tidak ada, bundle `web` yang sama (komponen xp).
     const src = `${base}/${entry.web.file}`;
-    const mod = await loadModule(src, entry.web.sha256);
-    const html = mod.renderHTML(props);
+    const server = entry.ssr ?? entry.web;
+    const mod = await loadModule(`${base}/${server.file}`, server.sha256);
+    const html = await mod.renderHTML(props); // Vue: Promise, lainnya: string
     return createElement(XPIsland, { src, html, props });
   }
   XPRemote.displayName = `XP(${name})`;

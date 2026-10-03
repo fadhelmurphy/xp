@@ -1,27 +1,73 @@
 # xp: komponen JSX → web + iOS + Android, di-load lewat URL
 
-Tulis komponen sekali dengan JSX + hooks, lalu satu perintah build menghasilkan bundle untuk web dan native. Tanpa React, tanpa React Native, dan **tanpa WebView**.
+Tulis komponen sekali, build dengan satu perintah, lalu muat lewat URL dari app mana pun.
+
+- **Crossplatform:** komponen `@xp/runtime` (JSX + hooks) → bundle web + bundle native untuk iOS/Android. **Tanpa WebView.**
+- **Web:** komponen **React, Vue, atau Svelte** biasa → bundle web. Runtime framework ikut di dalam bundle, jadi app pemakai tidak perlu memasang framework itu. App Next.js bisa memakai komponen Vue, dan app Nuxt bisa memakai komponen React.
 
 ```bash
-npm install
-npm run build   # xp build examples --out dist
-npm test        # 19 test: QuickJS (native), SSR, DOM, reconciler, slider
-npm run serve   # xp serve dist --port 4400 (CORS + cache header)
-npm run e2e     # app konsumen (Next.js/Nuxt) di Chromium, APP_URL=http://localhost:3300
-npm run demo:gif  # rekam ulang GIF demo web, APP_URL=... OUT=docs/demo-next.gif
+npx github:fadhelmurphy/xp build             # pilih komponen & target secara interaktif
+npx github:fadhelmurphy/xp build src -t web   # tanpa pertanyaan
 ```
 
-![Demo build: satu perintah menghasilkan bundle web, bundle native, dan tipe props untuk setiap komponen](docs/demo-build.gif)
+![Demo build: xp mendeteksi jenis tiap komponen, lalu membuat bundle web, ssr, dan native sesuai targetnya](docs/demo-build.gif)
 
+## CLI
+
+```
+xp build [folder] [opsi]      build komponen (default folder: src)
+xp list [folder]              daftar komponen beserta jenis dan target yang bisa dipakai
+xp serve [dist] [--port n]    sajikan hasil build (CORS + cache header)
+```
+
+| Opsi build | |
+|---|---|
+| `-t, --target <t>` | `auto` (default): `@xp/runtime` → web + iOS/Android, React/Vue/Svelte → web<br>`web`: semua komponen, web saja<br>`crossplatform`: hanya komponen `@xp/runtime`, web + iOS/Android |
+| `-o, --only a,b` | hanya komponen tertentu (nama file tanpa ekstensi) |
+| `--out <folder>` | folder hasil (default `dist`) |
+| `--clean` | kosongkan folder hasil dulu. Tanpa ini, hanya komponen yang di-build yang diganti; komponen lain tetap di manifest |
+| `-y, --yes` | jangan bertanya |
+
+Di terminal interaktif tanpa `--target`/`--only`, xp menanyakan komponen mana yang di-build (checkbox) dan targetnya. Jenis komponen dideteksi otomatis:
+
+| File | Jenis | Target yang bisa |
+|---|---|---|
+| `.tsx`/`.jsx` yang import `@xp/runtime` | xp | web + iOS/Android |
+| `.tsx`/`.jsx` yang import `react` | React | web |
+| `.vue` | Vue | web |
+| `.svelte` | Svelte | web |
+
+React, Vue, dan Svelte diambil dari `node_modules` proyek komponen (`npm i react react-dom`, `npm i vue`, atau `npm i svelte`). Komponen React/Vue/Svelte yang dipilih dengan target `crossplatform` ditolak dengan pesan yang jelas, karena iOS/Android butuh komponen `@xp/runtime`.
+
+Hasil build:
 ```
 dist/
-  manifest.json                      → nama → file terbaru, hash, primitive yang dipakai
-  promo-modal.<hash>.d.ts            → tipe props (untuk autocomplete di app konsumen)
-  promo-modal.web.<hash>.js          → browser + SSR     (~11 kB, runtime ikut)
-  promo-modal.native.<hash>.js       → QuickJS (Android) / JavaScriptCore (iOS) (~7 kB, runtime ikut)
+  manifest.json                      → nama → jenis, target, file terbaru, hash
+  <nama>.<hash>.d.ts                 → tipe props (autocomplete di app konsumen)
+  <nama>.web.<hash>.js               → dimuat browser (render/hydrate)
+  <nama>.ssr.<hash>.js               → dimuat server untuk SSR (hanya React/Vue/Svelte)
+  <nama>.native.<hash>.js            → QuickJS (Android) / JavaScriptCore (iOS), hanya komponen xp
 ```
 
-## Menulis komponen
+| Contoh | web | ssr | native |
+|---|---|---|---|
+| `promo-modal` (xp) | 11 kB | (sama dengan web) | 7 kB |
+| `like-button` (React) | 220 kB | 219 kB | – |
+| `rating-stars` (Vue) | 70 kB | 82 kB | – |
+| `faq-list` (Svelte) | 64 kB | 30 kB | – |
+
+Setiap bundle React/Vue/Svelte membawa runtime framework-nya sendiri. Untuk satu-dua komponen di sebuah halaman, ini praktis. Untuk banyak komponen dari framework yang sama di satu halaman, ukurannya ikut berlipat; di situ komponen xp (11 kB) jauh lebih ringan.
+
+Untuk pengembangan repo ini:
+```bash
+npm install
+npm run build     # xp build examples --out dist
+npm test          # 27 test: QuickJS, SSR, DOM, React/Vue/Svelte, CLI, reconciler
+npm run serve     # remote di :4400
+npm run e2e       # app konsumen (Next.js/Nuxt) di Chromium, APP_URL=http://localhost:3300
+```
+
+## Menulis komponen crossplatform (`@xp/runtime`)
 
 ```tsx
 import { Modal, Pressable, Text, View, useState } from "@xp/runtime";
@@ -58,13 +104,56 @@ Animasi ditulis secara deklaratif. JS hanya menentukan nilai akhir, lalu tiap pl
 
 `entering` tidak dijalankan saat render pertama, supaya konten hasil SSR tidak berkedip saat hydrate. Animasi yang mengikuti jari (gesture) belum didukung.
 
+## Menulis komponen web (React, Vue, Svelte)
+
+Tulis seperti biasa di framework masing-masing, termasuk hooks, `<script setup>`, runes, scoped CSS, dan transisi Svelte. Satu file = satu komponen, dengan default export (React) atau satu SFC (Vue/Svelte).
+
+```tsx
+// src/like-button.tsx
+import { useState } from "react";
+
+export default function LikeButton({ initial = 12 }: { initial?: number }) {
+  const [liked, setLiked] = useState(false);
+  return <button onClick={() => setLiked(!liked)}>{liked ? "♥" : "♡"} {initial + (liked ? 1 : 0)}</button>;
+}
+```
+```vue
+<!-- src/rating-stars.vue -->
+<script setup lang="ts">
+import { ref } from "vue";
+const value = ref(0);
+</script>
+<template>
+  <button v-for="i in 5" :key="i" :class="{ on: i <= value }" @click="value = i">★</button>
+</template>
+<style scoped>.on { color: #bf8700; }</style>
+```
+```svelte
+<!-- src/faq-list.svelte -->
+<script>
+  import { slide } from "svelte/transition";
+  let open = $state(false);
+</script>
+<button onclick={() => (open = !open)}>Pertanyaan</button>
+{#if open}<p transition:slide>Jawaban</p>{/if}
+```
+
+![Demo: komponen React, Vue, dan Svelte dipakai di app Next.js yang sama](docs/demo-frameworks.gif)
+
+Di app konsumen semuanya dipakai dengan cara yang sama: `import LikeButton from "xp:ui/like-button"`. Server merender HTML dengan bundle `ssr`, lalu browser meng-hydrate DOM yang sama dengan bundle `web`. CSS (scoped CSS Vue, CSS Svelte) ikut di HTML SSR dan dipindah ke `<head>` saat hydrate. Props harus bisa di-JSON-kan.
+
+Komponen ini hanya untuk web. Untuk iOS/Android, tulis dengan `@xp/runtime`.
+
 ## Contoh komponen
 
-Ada di folder [`examples/`](examples). Keduanya hanya memakai primitive dan `style`, jadi jalan sama di web, Android, dan iOS.
+Ada di folder [`examples/`](examples). `promo-modal` dan `promo-slider` hanya memakai primitive dan `style`, jadi jalan sama di web, Android, dan iOS. Tiga lainnya komponen web dari React, Vue, dan Svelte.
 
 | Komponen | Isi |
 |---|---|
 | [`promo-modal`](examples/promo-modal.tsx) | Kartu promo + modal pendaftaran: state, kondisional, tombol nonaktif, hitung total |
+| [`like-button`](examples/like-button.tsx) | React (web): tombol suka dengan `useState` |
+| [`rating-stars`](examples/rating-stars.vue) | Vue (web): rating bintang, `<script setup>`, scoped CSS |
+| [`faq-list`](examples/faq-list.svelte) | Svelte (web): FAQ dengan runes dan `transition:slide` |
 | [`promo-slider`](examples/promo-slider.tsx) | Slider promo: tombol ‹ ›, titik indikator yang bisa diklik, berputar di ujung, slide bisa diganti lewat props. Beranimasi: warna latar dan titik aktif bertransisi, konten slide baru masuk dari arah navigasi |
 
 ![Demo promo-slider di app Next.js](docs/demo-slider.gif)
@@ -280,6 +369,7 @@ Ini satu-satunya kontrak yang perlu diimplementasikan tim mobile (`runtime/proto
 ## Status
 
 - **M1 (selesai, teruji):** runtime, protokol, host native/DOM/SSR, CLI build + manifest. Bundle native dijalankan di QuickJS, dan hasilnya (modal, state, total, kondisional, event, update props, unmount) diverifikasi lewat tree operasi.
+- **Target web React/Vue/Svelte + CLI (selesai, teruji):** SSR + hydrate + scoped CSS di jsdom dan di Chromium, baik di app Next.js maupun Nuxt. Build parsial dan mode interaktif juga diuji, termasuk dari proyek terpisah lewat paket npm.
 - **Adapter Next.js & Nuxt (selesai, teruji di Chromium):** import `xp:ui/nama`, SSR + hydrate, tipe otomatis, update tanpa rebuild. Nuxt dibangun di atas `@xp/vite`, yang juga bisa dipakai untuk SvelteKit.
 - **SDK Android (`adapters/android`):** `XPView(base, name, props)`, yang memakai QuickJS (zipline) + Jetpack Compose, plus demo app. Inti-nya (tree, style, JSON) teruji dengan kotlinc terhadap sesi rekaman QuickJS. Bagian Compose belum dikompilasi di sini; lihat `adapters/android/README.md`.
 - **SDK iOS (`adapters/ios`):** `XPView(base:name:props:)`, yang memakai JavaScriptCore + SwiftUI, plus demo `ContentView`. Bundle native sudah terbukti jalan di JavaScriptCore (disimulasikan lewat Bun dengan alur yang sama seperti `XPEngine`). Kode Swift belum dikompilasi; jalankan `swift test` di Mac untuk memastikannya.

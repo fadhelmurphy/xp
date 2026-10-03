@@ -46,19 +46,22 @@ export async function renderRemote(base, name, props, revalidate = 30) {
     entry = (await getManifest(base, revalidate)).components?.[name];
   }
   if (!entry) throw new Error(`[xp] komponen "${name}" tidak ada di ${base}/manifest.json`);
+  // Browser memuat bundle `web`. Server memakai bundle `ssr` kalau ada (komponen React/Vue/Svelte).
   const src = `${base}/${entry.web.file}`;
-  let mod = serverModules.get(src);
+  const server = entry.ssr ?? entry.web;
+  const serverSrc = `${base}/${server.file}`;
+  let mod = serverModules.get(serverSrc);
   if (!mod) {
-    const res = await fetch(src);
-    if (!res.ok) throw new Error(`[xp] ${src} → HTTP ${res.status}`);
+    const res = await fetch(serverSrc);
+    if (!res.ok) throw new Error(`[xp] ${serverSrc} → HTTP ${res.status}`);
     const code = await res.text();
-    if (entry.web.sha256 && (await sha256(code)) !== entry.web.sha256) {
-      throw new Error(`[xp] ${src}: hash tidak cocok dengan manifest, bundle ditolak`);
+    if (server.sha256 && (await sha256(code)) !== server.sha256) {
+      throw new Error(`[xp] ${serverSrc}: hash tidak cocok dengan manifest, bundle ditolak`);
     }
     mod = evaluate(code);
-    serverModules.set(src, mod);
+    serverModules.set(serverSrc, mod);
   }
-  return { src, html: mod.renderHTML(props) };
+  return { src, html: await mod.renderHTML(props) }; // Vue: Promise, lainnya: string
 }
 
 /** Browser: muat bundle yang sama (file ber-hash → cache browser/CDN). */
