@@ -25,13 +25,22 @@ async function loadModule(src, expectedHash) {
   return module.exports;
 }
 
+async function getManifest(base, init, query = "") {
+  const res = await fetch(`${base}/manifest.json${query}`, init);
+  if (!res.ok) throw new Error(`[xp] ${base}/manifest.json → HTTP ${res.status}`);
+  return res.json();
+}
+
 export function remote(base, name, { revalidate = 30 } = {}) {
   async function XPRemote(props) {
     // Manifest di-revalidate berkala → deploy remote terbaru terpakai tanpa rebuild app ini.
-    const res = await fetch(`${base}/manifest.json`, { next: { revalidate } });
-    if (!res.ok) throw new Error(`[xp] ${base}/manifest.json → HTTP ${res.status}`);
-    const manifest = await res.json();
-    const entry = manifest.components?.[name];
+    let entry = (await getManifest(base, { next: { revalidate } })).components?.[name];
+    if (!entry) {
+      // Manifest di cache bisa lebih lama dari komponen yang di-import (mis. komponen baru):
+      // ambil ulang tanpa cache sebelum menyerah.
+      // URL dibedakan supaya tidak di-dedupe dengan fetch pertama (request memoization Next).
+      entry = (await getManifest(base, { cache: "no-store" }, `?t=${Date.now()}`)).components?.[name];
+    }
     if (!entry) throw new Error(`[xp] komponen "${name}" tidak ada di ${base}/manifest.json`);
 
     const src = `${base}/${entry.web.file}`;

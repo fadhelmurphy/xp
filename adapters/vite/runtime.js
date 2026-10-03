@@ -39,8 +39,12 @@ export async function getManifest(base, revalidate = 30) {
 
 /** Server: ambil bundle (diverifikasi sha256) lalu render HTML. */
 export async function renderRemote(base, name, props, revalidate = 30) {
-  const manifest = await getManifest(base, revalidate);
-  const entry = manifest.components?.[name];
+  let entry = (await getManifest(base, revalidate)).components?.[name];
+  if (!entry) {
+    // Manifest di cache bisa lebih lama dari komponen yang di-import: ambil ulang sekali.
+    manifests.delete(base);
+    entry = (await getManifest(base, revalidate)).components?.[name];
+  }
   if (!entry) throw new Error(`[xp] komponen "${name}" tidak ada di ${base}/manifest.json`);
   const src = `${base}/${entry.web.file}`;
   let mod = serverModules.get(src);
