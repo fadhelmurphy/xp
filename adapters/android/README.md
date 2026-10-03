@@ -14,7 +14,8 @@ XPView(
 
 **1. Jalankan remote di WSL** (dari root repo `xp`):
 ```bash
-npm run build && npm run serve      # http://localhost:4400
+npx github:fadhelmurphy/xp build examples -y
+npx github:fadhelmurphy/xp serve      # http://localhost:4400
 ```
 
 **2. Salin folder ini ke drive Windows.** Android Studio dan Gradle sering bermasalah dengan path `\\wsl.localhost\...`.
@@ -32,14 +33,14 @@ Yang seharusnya terlihat:
 - Tombol **+ / −** mengubah jumlah peserta, total dihitung, dan muncul teks "Kuota penuh". Semua logika ini jalan di QuickJS di dalam app.
 - Tombol back atau tap di luar dialog akan menutupnya (`onRequestClose`).
 
-**Bukti komponennya dinamis:** ubah teks `"Lihat detail"` di `examples/promo-modal.tsx`, jalankan `npm run build`, lalu tap **Muat ulang dari URL** di app. Teksnya berubah tanpa build ulang app.
+**Bukti komponennya dinamis:** ubah teks `"Lihat detail"` di `examples/promo-modal.tsx`, jalankan `npx github:fadhelmurphy/xp build examples -y`, lalu tap **Muat ulang dari URL** di app. Teksnya berubah tanpa build ulang app.
 
 **Bukti tidak memakai WebView:** di Android Studio buka *Tools → Layout Inspector*. Yang muncul adalah tree Compose (`Column`, `Text`, `Dialog`), bukan `WebView`.
 
 ### Kalau gagal
 | Gejala | Penyebab / solusi |
 |---|---|
-| "tidak bisa diakses" | `npm run serve` belum jalan, atau port 4400 dari WSL tidak diteruskan ke Windows. Coba buka `http://localhost:4400` di browser Windows. |
+| "tidak bisa diakses" | `npx github:fadhelmurphy/xp serve` belum jalan, atau port 4400 dari WSL tidak diteruskan ke Windows. Coba buka `http://localhost:4400` di browser Windows. |
 | HP fisik | Ganti `xpUrl` di `gradle.properties` dengan IP laptop, misalnya `http://192.168.1.10:4400`, dan pastikan satu jaringan Wi-Fi. |
 | "protokol … tidak didukung" | Versi bundle di remote lebih baru dari SDK. Build ulang app. |
 | "primitive yang belum didukung" | Komponen memakai primitive yang belum ada di SDK versi ini. |

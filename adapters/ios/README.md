@@ -27,7 +27,7 @@ Kalau remote masih memakai `http://` (development), tambahkan ini di `Info.plist
 
 ## Menjalankan demo di Simulator (butuh Mac + Xcode)
 
-1. Di root repo `xp`, jalankan `npm install && npm run build && npm run serve`. Remote akan jalan di `http://localhost:4400`.
+1. Di root repo `xp`, jalankan `npx github:fadhelmurphy/xp build examples -y` lalu `npx github:fadhelmurphy/xp serve`. Remote akan jalan di `http://localhost:4400`.
 2. Di Xcode: *File → New → Project → iOS App*, beri nama `XPDemo`, pilih interface **SwiftUI**.
 3. Tambahkan package lokal `adapters/ios` seperti langkah di atas.
 4. Ganti isi `ContentView.swift` dengan [`Demo/ContentView.swift`](Demo/ContentView.swift), lalu tambahkan `NSAllowsLocalNetworking` ke Info.plist.
@@ -37,7 +37,7 @@ Yang seharusnya terlihat:
 - Kartu **Kelas IELTS**.
 - Tap **Lihat detail** membuka **sheet iOS native**, yang bisa ditutup dengan swipe ke bawah (`onRequestClose`).
 - Tombol **+ / −** mengubah jumlah peserta, total dihitung, dan muncul teks "Kuota penuh". Semua logika ini jalan di JavaScriptCore.
-- Ubah teks di `examples/promo-modal.tsx`, jalankan `npm run build`, lalu tap **Muat ulang dari URL**. Teksnya berubah tanpa build ulang app.
+- Ubah teks di `examples/promo-modal.tsx`, jalankan `npx github:fadhelmurphy/xp build examples -y`, lalu tap **Muat ulang dari URL**. Teksnya berubah tanpa build ulang app.
 
 **Bukti tidak memakai WebView:** di Xcode buka *Debug View Hierarchy*. Yang muncul adalah view SwiftUI (`Text`, `Button`, sheet), bukan `WKWebView`.
 

@@ -91,10 +91,10 @@ Setiap bundle React/Vue/Svelte membawa runtime framework sendiri. Untuk satu dua
 
 ```bash
 npm install
-npm run build     # xp build examples --out dist
-npm test          # 27 test
-npm run serve     # remote di :4400
-npm run e2e       # tes app Next.js/Nuxt di Chromium (APP_URL=http://localhost:3300)
+npx github:fadhelmurphy/xp build examples -y   # build contoh ke dist/
+npx github:fadhelmurphy/xp serve               # remote di :4400
+npm test                                        # 27 test
+npm run e2e                                     # tes app Next.js/Nuxt di Chromium (APP_URL=http://localhost:3300)
 ```
 
 ## Komponen @xp/runtime
@@ -266,7 +266,7 @@ Beberapa hal yang perlu diketahui:
 Menjalankan contoh di `examples-consumer/next-app`:
 
 ```bash
-npm run build && npm run serve                     # terminal 1
+npx github:fadhelmurphy/xp build examples -y && npx github:fadhelmurphy/xp serve   # terminal 1
 cd adapters/next && npm pack
 cd ../../examples-consumer/next-app && npm install
 npx next build && npx next start -p 3300           # terminal 2
