@@ -114,7 +114,7 @@ Browser hanya mengunduh bundle `web`; bundle `ssr` dipakai server. Komponen xp m
 - Versi xp sama: file runtime-nya identik, dan adapter mengenalinya dari sha256-nya.
 - Versi xp berbeda: setiap runtime mencatat `api` dan versinya. Runtime yang lebih baru dengan `api` yang sama bisa menjalankan komponen yang di-build xp versi lebih lama.
 - Komponen yang dimuat bersamaan (misalnya semua komponen di satu halaman saat hydrate) dikumpulkan dulu, lalu hanya runtime versi tertinggi yang diunduh.
-- Kalau komponen yang butuh runtime lebih baru datang belakangan (misalnya dimuat saat scroll), runtime baru itu diunduh dan komponen yang sudah tampil dipindah ke sana. Elemen DOM-nya tetap sama (runtime baru meng-hydrate elemen yang sudah ada), begitu juga state `useState`-nya. Jadi tetap hanya satu runtime yang aktif. Runtime lama sudah telanjur terunduh, tapi tidak dipakai lagi.
+- Kalau komponen yang butuh runtime lebih baru datang belakangan (misalnya dimuat saat scroll), runtime baru itu diunduh dan komponen yang sudah tampil dipindah ke sana tanpa terasa: elemen DOM-nya sama, dan hook-nya diserahkan apa adanya. `useState`, `useRef`, dan `useMemo` memegang nilai yang sama, dan `useEffect` yang sedang jalan (misalnya timer `autoplay`) diteruskan, tidak dihentikan atau diulang. Jadi tetap hanya satu runtime yang aktif. Runtime lama sudah telanjur terunduh, tapi tidak dipakai lagi.
 
 Kontraknya ada di [`runtime/api.json`](runtime/api.json): dalam satu `api`, export runtime hanya boleh bertambah. Kalau ada yang dihapus atau perilakunya berubah, `api` dinaikkan, dan remote dengan `api` berbeda memuat runtime masing-masing. Test memastikan runtime tidak melanggar daftar itu. Komponen React, Vue, dan Svelte membawa runtime framework-nya sendiri di setiap bundle.
 
@@ -527,6 +527,7 @@ Yang sudah dites:
 - `setTimeout`/`setInterval` dan snapshot state di QuickJS dan JavaScriptCore (lewat Bun).
 - `xp dev` di Chromium: file diubah, pratinjau memuat versi baru, state tetap. Hal yang sama dengan `next dev` dan `nuxt dev`.
 - Browser menolak bundle web yang hash-nya tidak cocok dengan manifest.
+- Pindah runtime di halaman yang sama: elemen DOM, `useState`, `useRef`, `useMemo`, dan effect yang sedang jalan (interval) tetap, dan cleanup effect hanya jalan sekali saat komponen benar-benar dilepas.
 - Signing: tanda tangan dari Node diverifikasi WebCrypto, Next.js (manifest yang diubah ditolak), dan Kotlin lewat kotlinc.
 
 Yang belum:
@@ -536,4 +537,3 @@ Yang belum:
 - Belum ada GIF demo untuk Android dan iOS.
 - Layout di mobile belum memakai Yoga, jadi hasilnya bisa sedikit berbeda dari web.
 - `dragAxis` di Android (Compose) dan iOS (SwiftUI) belum pernah dijalankan; logika sumbunya saja yang dites.
-- Saat pindah runtime, yang dibawa hanya `useState`. Nilai `useRef` dan `useMemo` dihitung ulang, dan `useEffect` jalan lagi dari awal (misalnya timer `autoplay` mulai menghitung lagi).

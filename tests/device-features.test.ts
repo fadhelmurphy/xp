@@ -224,3 +224,49 @@ test("web: pindah ke runtime lain memakai elemen DOM yang sama dan state tetap",
   assert.equal(q("qty").textContent, "Peserta: 3");
   second.unmount();
 });
+
+test("web: pindah runtime meneruskan useRef, useMemo, dan effect yang sedang jalan", async () => {
+  const { mkdtempSync } = await import("node:fs");
+  const { tmpdir } = await import("node:os");
+  const path = await import("node:path");
+  // @ts-expect-error modul .mjs tanpa tipe
+  const { discover, plan, runBuild } = await import("../cli/build.mjs");
+  const out = mkdtempSync(path.join(tmpdir(), "xp-handover-"));
+  const src = "tests/fixtures/handover";
+  const { manifest } = await runBuild({ srcDir: src, outDir: out, jobs: plan(await discover(src), "web").jobs });
+  const web = manifest.components.probe.web;
+
+  const dom = new JSDOM(`<div id="app"></div>`);
+  Object.assign(globalThis as any, { window: dom.window, document: dom.window.document, Node: dom.window.Node });
+  const runtimeCode = readFileSync(path.join(out, web.runtime.file), "utf8");
+  const componentCode = readFileSync(path.join(out, web.file), "utf8");
+  const withRuntime = () => {
+    const rt = evaluate(runtimeCode).modules;
+    return evaluate(componentCode, (id) => rt[id]);
+  };
+  const g = globalThis as any;
+  g.__effectRuns = 0;
+  g.__cleanups = 0;
+  const app = dom.window.document.getElementById("app")!;
+  const text = (id: string) => app.querySelector(`[data-testid="${id}"]`)!.textContent;
+
+  const first = withRuntime().render(app, {});
+  await sleep(60);
+  const nBefore = Number(text("n"));
+  assert.ok(nBefore >= 2, `interval jalan (${nBefore})`);
+  const [ref, memo, nEl] = [text("ref"), text("memo"), app.querySelector('[data-testid="n"]')];
+
+  const adopt = first.handover();
+  const second = withRuntime().render(app, {}, { adopt });
+  assert.equal(app.querySelector('[data-testid="n"]'), nEl, "elemen DOM yang sama");
+  assert.equal(text("ref"), ref, "useRef: objek yang sama");
+  assert.equal(text("memo"), memo, "useMemo: tidak dihitung ulang");
+  assert.equal(g.__effectRuns, 1, "effect tidak dijalankan ulang");
+  assert.equal(g.__cleanups, 0, "effect tidak dihentikan");
+
+  await sleep(60);
+  assert.ok(Number(text("n")) > nBefore, "interval dari effect lama terus mengubah state di runtime baru");
+
+  second.unmount();
+  assert.equal(g.__cleanups, 1, "cleanup jalan sekali saat komponen benar-benar dilepas");
+});

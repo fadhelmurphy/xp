@@ -33,6 +33,8 @@ type CompInst = {
   path: string;
   /** State dari snapshot sebelum reload: indeks hook → nilai useState. */
   restore?: Record<string, unknown>;
+  /** Hook hidup dari runtime lain (pindah runtime): dipakai apa adanya, termasuk ref dan effect. */
+  adopt?: (Hook | undefined)[];
   props: Props;
   children: Inst[];
   hostParent: HostInst;
@@ -54,7 +56,16 @@ type RootCtx = {
   effects: Hook[];
   runEffects: boolean;
   restore: Snapshot | null;
+  adopt: Handover | null;
 };
+
+/**
+ * Hook semua komponen yang sedang tampil, per posisi, sebagai objek hidup (bukan JSON).
+ * Dipakai saat komponen pindah ke runtime lain di halaman yang sama: state, ref, memo, dan effect
+ * berjalan terus tanpa diulang. Bentuk objek hook adalah kontrak antar versi runtime: HANDOVER_VERSION.
+ */
+export type Handover = Record<string, Hook[]>;
+export const HANDOVER_VERSION = 1;
 
 /** State useState setiap komponen, per posisi di tree. Harus bisa di-JSON-kan. */
 export type Snapshot = Record<string, Record<string, unknown>>;
@@ -85,10 +96,22 @@ function normalize(node: unknown, out: VNode[] = []): VNode[] {
 let current: CompInst | null = null;
 let hookIndex = 0;
 
-function nextHook(): Hook {
+function nextHook(kind: "state" | "ref" | "memo" | "effect"): Hook {
   if (!current) throw new Error("Hooks hanya boleh dipanggil di dalam komponen");
   const i = hookIndex++;
-  return (current.hooks[i] ??= {});
+  let h = current.hooks[i];
+  if (!h) {
+    // Hook dari runtime sebelumnya dipakai kalau jenisnya sama di urutan yang sama.
+    const adopted = current.adopt?.[i];
+    if (adopted && adopted.kind === kind) {
+      h = adopted;
+      current.adopt![i] = undefined;
+    } else {
+      h = { kind };
+    }
+    current.hooks[i] = h;
+  }
+  return h;
 }
 
 function depsChanged(a: unknown[] | undefined, b: unknown[] | undefined) {
@@ -97,7 +120,7 @@ function depsChanged(a: unknown[] | undefined, b: unknown[] | undefined) {
 
 export function useState<T>(init: T | (() => T)): [T, (v: T | ((prev: T) => T)) => void] {
   const comp = current!;
-  const h = nextHook();
+  const h = nextHook("state");
   if (!("value" in h)) {
     const saved = comp.restore;
     const i = String(hookIndex - 1);
@@ -106,24 +129,30 @@ export function useState<T>(init: T | (() => T)): [T, (v: T | ((prev: T) => T)) 
     const keep = saved && i in saved && (initial == null || typeof saved[i] === typeof initial);
     h.value = keep ? (saved[i] as T) : initial;
     h.state = true;
-    h.set = (v: T | ((p: T) => T)) => {
+    // Setter tetap sama selamanya dan meneruskan ke `dispatch` milik runtime yang sedang memegang
+    // hook ini. Setter yang sudah tertangkap closure (mis. di timer) tetap jalan setelah pindah runtime.
+    h.set = (v: unknown) => h.dispatch(v);
+  }
+  if (h.owner !== comp) {
+    h.owner = comp;
+    h.dispatch = (v: T | ((p: T) => T)) => {
       const next = typeof v === "function" ? (v as (p: T) => T)(h.value) : v;
       if (Object.is(next, h.value)) return;
       h.value = next;
-      schedule(comp);
+      schedule(h.owner);
     };
   }
   return [h.value, h.set];
 }
 
 export function useRef<T>(init: T): { current: T } {
-  const h = nextHook();
+  const h = nextHook("ref");
   if (!("ref" in h)) h.ref = { current: init };
   return h.ref;
 }
 
 export function useMemo<T>(fn: () => T, deps: unknown[]): T {
-  const h = nextHook();
+  const h = nextHook("memo");
   if (!("value" in h) || depsChanged(h.deps, deps)) {
     h.value = fn();
     h.deps = deps;
@@ -137,7 +166,7 @@ export function useCallback<T extends (...a: any[]) => any>(fn: T, deps: unknown
 
 export function useEffect(fn: () => void | (() => void), deps?: unknown[]) {
   const comp = current!;
-  const h = nextHook();
+  const h = nextHook("effect");
   if (deps === undefined || depsChanged(h.deps, deps)) {
     h.pending = fn;
     h.deps = deps;
@@ -202,8 +231,14 @@ function mount(root: RootCtx, v: VNode, hostParent: HostInst, depth: number, pat
   const inst: CompInst = {
     kind: "comp", type: v.type, key: v.key, path, props: v.props, children: [], hostParent,
     hooks: [], depth, unmounted: false, renderedIn: -1, root, restore: root.restore?.[path],
+    adopt: root.adopt?.[path] ? [...root.adopt[path]] : undefined,
   };
   renderComp(root, inst);
+  if (inst.adopt) {
+    // Hook lama yang tidak terpakai (struktur komponen berbeda): bersihkan effect-nya.
+    for (const h of inst.adopt) if (typeof h?.cleanup === "function") h.cleanup();
+    inst.adopt = undefined;
+  }
   return inst;
 }
 
@@ -311,15 +346,17 @@ export function createRoot(host: Host, opts: { effects?: boolean } = {}) {
   const container: HostInst = { kind: "host", type: "#root", id: ROOT_ID, key: null, path: "", props: {}, children: [], lastIds: [] };
   const root: RootCtx = {
     host, nextId: 1, dirty: new Set(), scheduled: false, flushId: 0, effects: [],
-    runEffects: opts.effects ?? true, restore: null,
+    runEffects: opts.effects ?? true, restore: null, adopt: null,
   };
   return {
     /** `restore`: snapshot dari versi sebelumnya; state komponen di posisi yang sama dipakai lagi. */
-    render(element: unknown, restore?: Snapshot | null) {
+    render(element: unknown, restore?: Snapshot | null, adopt?: Handover | null) {
       root.flushId++;
       root.restore = restore ?? null;
+      root.adopt = adopt ?? null;
       container.children = reconcile(root, container.children, normalize(element), container, 0, "");
       root.restore = null;
+      root.adopt = null;
       syncChildren(root, container);
       commit(root);
     },
@@ -350,6 +387,25 @@ export function createRoot(host: Host, opts: { effects?: boolean } = {}) {
         inst.children.forEach(walk);
       };
       container.children.forEach(walk);
+      return out;
+    },
+    /**
+     * Serahkan semua hook hidup ke runtime lain, lalu berhenti tanpa menjalankan cleanup effect
+     * (effect-nya diteruskan, bukan dihentikan). Host tidak diberi tahu; DOM dibiarkan.
+     */
+    handover(): Handover {
+      const out: Handover = {};
+      const walk = (inst: Inst) => {
+        if (inst.kind === "comp") {
+          if (inst.hooks.length) out[inst.path] = inst.hooks;
+          inst.unmounted = true;
+        }
+        inst.children.forEach(walk);
+      };
+      container.children.forEach(walk);
+      container.children = [];
+      root.dirty.clear();
+      root.effects = [];
       return out;
     },
     unmount() {

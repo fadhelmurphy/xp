@@ -186,9 +186,19 @@ export async function loadBundle(src, expectedHash, runtime) {
 
 const mounted = new Set();
 
-async function rerender(handle, bundle, entry) {
+async function rerender(handle, bundle, entry, { migrate = false } = {}) {
   const mod = await moduleFor(bundle.src, bundle.sha256, entry);
   if (!mounted.has(handle)) return;
+  // Pindah runtime dengan kode komponen yang sama: serahkan hook hidup (state, ref, memo, effect
+  // yang sedang jalan) apa adanya. Butuh kedua runtime mendukung versi handover yang sama.
+  const rt = migrate && entry ? await entry.promise : null;
+  if (rt && handle.inner.handover && rt.modules?.["@xp/runtime/hosts/dom"]?.HANDOVER_VERSION === handle.inner.handoverVersion) {
+    const adopt = handle.inner.handover();
+    handle.inner = mod.render(handle.el, handle.props, { adopt });
+    handle.bundle = bundle;
+    handle.entry = entry;
+    return;
+  }
   const restore = handle.snapshot();
   if (handle.inner.release) {
     // Elemen DOM dibiarkan; bundle baru me-mount dengan state yang sama dan meng-hydrate elemen itu.
@@ -211,7 +221,7 @@ async function upgradeMounted(entry) {
   }
   for (const h of [...mounted]) {
     if (h.entry && h.entry !== entry && h.entry.api === entry.api && compareVersions(h.entry.version, entry.version) <= 0) {
-      await rerender(h, h.bundle, entry).catch((e) => console.error("[xp] pindah runtime gagal", e));
+      await rerender(h, h.bundle, entry, { migrate: true }).catch((e) => console.error("[xp] pindah runtime gagal", e));
     }
   }
 }

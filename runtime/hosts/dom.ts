@@ -1,7 +1,9 @@
 // Host browser: operasi → elemen DOM.
 import { jsx, type ComponentFn } from "../jsx-runtime";
 import { ROOT_ID } from "../protocol";
-import { createRoot, TEXT, type Host, type Snapshot } from "../reconciler";
+import { createRoot, HANDOVER_VERSION, TEXT, type Handover, type Host, type Snapshot } from "../reconciler";
+
+export { HANDOVER_VERSION };
 import { swipeDirection } from "./gesture";
 import { htmlAttrs } from "./html";
 import { cssText, styleToCss, TAGS } from "./web-style";
@@ -271,12 +273,12 @@ export function mount(
   container: HTMLElement,
   Component: ComponentFn,
   props: Record<string, unknown> = {},
-  opts: { restore?: Snapshot | null } = {},
+  opts: { restore?: Snapshot | null; adopt?: Handover | null } = {},
 ) {
   const staging = document.createElement(container.tagName);
   const host = new DomHost(staging);
   const root = createRoot(host);
-  root.render(jsx(Component, props), opts.restore);
+  root.render(jsx(Component, props), opts.restore, opts.adopt);
   const hasSSR = [...container.childNodes].some((n) => n.nodeType === 1 || (n.nodeType === 3 && n.textContent!.trim()));
   if (!hasSSR || !host.hydrate(container)) {
     container.textContent = "";
@@ -297,5 +299,14 @@ export function mount(
       host.detached = true;
       root.unmount();
     },
+    /**
+     * Seperti release, tapi hook hidup (state, ref, memo, effect yang sedang jalan) diserahkan ke
+     * runtime baru lewat mount(el, C, props, { adopt }), tanpa menjalankan cleanup.
+     */
+    handover: () => {
+      host.detached = true;
+      return root.handover();
+    },
+    handoverVersion: HANDOVER_VERSION,
   };
 }
