@@ -126,3 +126,47 @@ test("runtime xp memenuhi kontrak api.json (export hanya boleh bertambah)", asyn
     for (const n of names) assert.ok(n in mod.exports.modules[id], `${id} harus mengekspor ${n}`);
   }
 });
+
+test("runtime lama dimuat duluan: permintaan bersamaan memilih yang terbaru, yang datang belakangan memindahkan komponen", async () => {
+  // @ts-expect-error modul .js tanpa tipe
+  const client = await import("../adapters/vite/client.js?urutan");
+  const runtimeCode = (v: string) => `module.exports = { api: 7, version: "${v}", modules: { "@xp/runtime": { v: "${v}" } } };`;
+  // Komponen palsu: render mencatat runtime yang dipakai dan snapshot yang dibawa.
+  const component = `module.exports.render = (el, props, opts) => {
+    const rt = require("@xp/runtime");
+    el.runtime = rt.v; el.restored = opts && opts.restore; el.renders = (el.renders || 0) + 1;
+    return { update() {}, unmount() { el.runtime = null; }, snapshot() { return { count: 7 }; } };
+  };`;
+  const fetched: string[] = [];
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = (async (url: string) => {
+    fetched.push(url);
+    const v = url.match(/runtime-(\d+\.\d+\.\d+)/)?.[1];
+    return new Response(v ? runtimeCode(v) : component);
+  }) as typeof fetch;
+  const bundle = (team: string, version: string) => ({
+    src: `https://${team}.cdn/${team}.web.js`,
+    sha256: hex(component),
+    runtime: { src: `https://${team}.cdn/runtime-${version}.js`, sha256: hex(runtimeCode(version)), api: 7, version },
+  });
+  const el = () => ({ textContent: "" }) as any;
+  try {
+    // 1. Dimuat bersamaan (seperti island yang hydrate di tick yang sama): hanya 0.5.0 yang diunduh.
+    const [a, b] = [el(), el()];
+    await Promise.all([client.mountComponent(a, bundle("lama", "0.4.0"), {}), client.mountComponent(b, bundle("baru", "0.5.0"), {})]);
+    assert.equal(a.runtime, "0.5.0");
+    assert.equal(b.runtime, "0.5.0");
+    assert.ok(!fetched.some((u) => u.includes("runtime-0.4.0")), "runtime 0.4.0 tidak diunduh");
+
+    // 2. Komponen yang butuh runtime lebih baru datang belakangan: semua dipindah ke runtime itu.
+    const c = el();
+    await client.mountComponent(c, bundle("terbaru", "0.6.0"), {});
+    await new Promise((r) => setTimeout(r, 10));
+    assert.deepEqual([a.runtime, b.runtime, c.runtime], ["0.6.0", "0.6.0", "0.6.0"]);
+    assert.deepEqual(a.restored, { count: 7 }, "state dibawa saat pindah runtime");
+    const info = client.runtimeInfo();
+    assert.deepEqual(info.active.filter((r: any) => r.api === 7).map((r: any) => r.version), ["0.6.0"], "hanya satu runtime yang aktif");
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+});

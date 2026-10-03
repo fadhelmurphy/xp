@@ -57,8 +57,6 @@ export async function sha256(text) {
 
 // --- muat bundle ---
 
-const cache = new Map(); // src (atau "xp-runtime:<sha256>") → Promise<exports>
-
 async function fetchVerified(src, expectedHash) {
   const res = await fetch(src);
   if (!res.ok) throw new Error(`${src} → HTTP ${res.status}`);
@@ -69,17 +67,18 @@ async function fetchVerified(src, expectedHash) {
   return code;
 }
 
-function once(src, load) {
-  if (!cache.has(src)) {
-    cache.set(
-      src,
+/** Cache promise per key; kalau gagal, key dihapus supaya bisa dicoba lagi. */
+function cached(map, key, load) {
+  if (!map.has(key)) {
+    map.set(
+      key,
       load().catch((e) => {
-        cache.delete(src); // coba lagi nanti
+        map.delete(key);
         throw e;
       }),
     );
   }
-  return cache.get(src);
+  return map.get(key);
 }
 
 function evaluate(code, require) {
@@ -87,9 +86,6 @@ function evaluate(code, require) {
   new Function("module", "exports", "require", code)(module, module.exports, require);
   return module.exports;
 }
-
-// Runtime xp yang sudah dimuat (atau sedang dimuat) di halaman ini, per `api`.
-const runtimesByApi = new Map(); // api → [{ version, promise }]
 
 /** Bandingkan versi "a.b.c". Hasil > 0 kalau a lebih baru. */
 export function compareVersions(a, b) {
@@ -102,60 +98,156 @@ export function compareVersions(a, b) {
   return 0;
 }
 
-/**
- * Runtime xp bersama, dipakai oleh semua komponen xp di halaman, dari remote mana pun.
- * - Isi sama (sha256 sama) → runtime yang sudah ada dipakai.
- * - `api` sama dan versi yang sudah dimuat >= versi yang dibutuhkan → dipakai juga: runtime yang
- *   lebih baru kompatibel dengan komponen yang di-build xp versi lebih lama (lihat runtime/api.json).
- * - Selain itu runtime ini dimuat, dan dipakai juga oleh komponen berikutnya yang cocok.
- */
-function loadRuntime(runtime) {
-  const key = runtime.sha256 ? `xp-runtime:${runtime.sha256}` : runtime.src;
-  if (cache.has(key) || runtime.api == null || runtime.version == null) return once(key, () => fetchRuntime(runtime));
+// --- runtime bersama ---
+//
+// Semua komponen xp di halaman, dari remote mana pun, sebisa mungkin memakai satu runtime:
+// - Runtime dengan `api` sama dan versi lebih baru bisa menjalankan komponen yang di-build xp versi
+//   lebih lama (kontraknya di runtime/api.json).
+// - Permintaan runtime yang datang bersamaan (mis. semua island hydrate di tick yang sama) dikumpulkan
+//   dulu, lalu hanya versi tertinggi yang diunduh.
+// - Kalau runtime yang lebih baru datang belakangan, komponen yang sudah tampil dipindah ke runtime
+//   itu (state dibawa lewat snapshot), jadi tetap satu runtime yang aktif.
 
-  const loaded = runtimesByApi.get(runtime.api) ?? [];
-  const newest = loaded
-    .filter((r) => compareVersions(r.version, runtime.version) >= 0)
+let lastRuntimeId = 0;
+const runtimes = new Map(); // sha256 (atau src) → entry { id, api, version, promise }
+const batches = new Map(); // api → { requests, promise, resolve }
+
+function newestFor(api, version) {
+  return [...runtimes.values()]
+    .filter((r) => r.api === api && compareVersions(r.version, version) >= 0)
     .sort((a, b) => compareVersions(b.version, a.version))[0];
-  if (newest) return newest.promise;
-
-  const promise = once(key, () => fetchRuntime(runtime));
-  const entry = { version: runtime.version, promise };
-  runtimesByApi.set(runtime.api, [...loaded, entry]);
-  promise.catch(() => runtimesByApi.set(runtime.api, (runtimesByApi.get(runtime.api) ?? []).filter((r) => r !== entry)));
-  return promise;
 }
 
-async function fetchRuntime(runtime) {
-  const mod = evaluate(await fetchVerified(runtime.src, runtime.sha256));
-  if (runtime.api != null && mod.api != null && mod.api !== runtime.api) {
-    throw new Error(`${runtime.src}: runtime api ${mod.api}, manifest menyebut ${runtime.api}`);
+function startRuntime(runtime) {
+  const key = runtime.sha256 ?? runtime.src;
+  if (runtimes.has(key)) return runtimes.get(key);
+  const entry = { id: ++lastRuntimeId, api: runtime.api, version: runtime.version, src: runtime.src };
+  entry.promise = (async () => {
+    const mod = evaluate(await fetchVerified(runtime.src, runtime.sha256));
+    if (runtime.api != null && mod.api != null && mod.api !== runtime.api) {
+      throw new Error(`${runtime.src}: runtime api ${mod.api}, manifest menyebut ${runtime.api}`);
+    }
+    return mod;
+  })();
+  entry.promise.catch(() => runtimes.delete(key));
+  runtimes.set(key, entry);
+  return entry;
+}
+
+/** Runtime yang dipakai untuk satu komponen: Promise<entry>. */
+function chooseRuntime(runtime) {
+  // Manifest lama tanpa api/versi: hanya dipakai bersama kalau isinya identik.
+  if (runtime.api == null || runtime.version == null) return Promise.resolve(startRuntime(runtime));
+  const ready = newestFor(runtime.api, runtime.version);
+  if (ready) return Promise.resolve(ready);
+
+  let batch = batches.get(runtime.api);
+  if (!batch) {
+    batch = { requests: [] };
+    batch.promise = new Promise((resolve) => (batch.resolve = resolve));
+    batches.set(runtime.api, batch);
+    setTimeout(() => {
+      batches.delete(runtime.api);
+      const best = batch.requests.sort((a, b) => compareVersions(b.version, a.version))[0];
+      const entry = newestFor(best.api, best.version) ?? startRuntime(best);
+      batch.resolve(entry);
+      upgradeMounted(entry);
+    }, 0);
   }
-  return mod;
+  batch.requests.push(runtime);
+  return batch.promise;
 }
 
-/** Runtime xp yang sedang dipakai di halaman ini (untuk debug dan tes). */
-export function loadedRuntimes() {
-  return [...runtimesByApi.entries()].flatMap(([api, list]) => list.map((r) => ({ api, version: r.version })));
-}
+const modules = new Map(); // "src|runtimeId" → Promise<exports>
+const codes = new Map(); // src → Promise<kode yang sudah dicek hash-nya>
 
-/**
- * Unduh bundle web, cocokkan dengan sha256 dari manifest, lalu jalankan. Hasilnya di-cache per URL.
- * `runtime` ({ src, sha256 }): runtime xp bersama yang di-require bundle komponen xp. Dimuat sekali
- * untuk semua komponen dari remote yang sama.
- */
-export function loadBundle(src, expectedHash, runtime) {
-  return once(src, async () => {
-    const [code, modules] = await Promise.all([
-      fetchVerified(src, expectedHash),
-      runtime ? loadRuntime(runtime) : null,
-    ]);
+function moduleFor(src, expectedHash, entry) {
+  return cached(modules, `${src}|${entry?.id ?? 0}`, async () => {
+    const [code, rt] = await Promise.all([cached(codes, src, () => fetchVerified(src, expectedHash)), entry?.promise]);
     return evaluate(code, (id) => {
-      const mod = modules?.modules?.[id];
+      const mod = rt?.modules?.[id];
       if (!mod) throw new Error(`${src} membutuhkan ${id}, tapi runtime xp tidak dimuat`);
       return mod;
     });
   });
+}
+
+/**
+ * Unduh bundle web, cocokkan dengan sha256 dari manifest, lalu jalankan.
+ * `runtime` ({ src, sha256, api, version }): runtime xp yang di-require bundle komponen xp.
+ */
+export async function loadBundle(src, expectedHash, runtime) {
+  return moduleFor(src, expectedHash, runtime ? await chooseRuntime(runtime) : null);
+}
+
+// --- komponen yang sedang tampil ---
+
+const mounted = new Set();
+
+async function rerender(handle, bundle, entry) {
+  const mod = await moduleFor(bundle.src, bundle.sha256, entry);
+  if (!mounted.has(handle)) return;
+  const restore = handle.snapshot();
+  handle.inner.unmount();
+  handle.el.textContent = "";
+  handle.inner = mod.render(handle.el, handle.props, { restore });
+  handle.bundle = bundle;
+  handle.entry = entry;
+}
+
+async function upgradeMounted(entry) {
+  try {
+    await entry.promise;
+  } catch {
+    return;
+  }
+  for (const h of [...mounted]) {
+    if (h.entry && h.entry !== entry && h.entry.api === entry.api && compareVersions(h.entry.version, entry.version) <= 0) {
+      await rerender(h, h.bundle, entry).catch((e) => console.error("[xp] pindah runtime gagal", e));
+    }
+  }
+}
+
+/**
+ * Tampilkan komponen di `el` (hydrate kalau `el` berisi HTML SSR yang cocok).
+ * `bundle`: { src, sha256, runtime }. Mengembalikan handle { update, unmount, snapshot, replace }.
+ */
+export async function mountComponent(el, bundle, props, opts) {
+  const entry = bundle.runtime ? await chooseRuntime(bundle.runtime) : null;
+  const mod = await moduleFor(bundle.src, bundle.sha256, entry);
+  const handle = {
+    el,
+    bundle,
+    entry,
+    props,
+    inner: mod.render(el, props, opts),
+    update(next) {
+      handle.props = next;
+      handle.inner.update(next);
+    },
+    unmount() {
+      mounted.delete(handle);
+      handle.inner.unmount();
+    },
+    snapshot() {
+      return handle.inner.snapshot?.() ?? null;
+    },
+    /** Ganti ke bundle lain (build baru dari xp dev). State useState dibawa. */
+    async replace(next) {
+      await rerender(handle, next, next.runtime ? await chooseRuntime(next.runtime) : null);
+    },
+  };
+  mounted.add(handle);
+  // Runtime yang lebih baru sudah dimuat selagi komponen ini disiapkan: pindah sekarang.
+  const newer = entry && newestFor(entry.api, entry.version);
+  if (newer && newer !== entry) upgradeMounted(newer);
+  return handle;
+}
+
+/** Runtime xp yang sudah dimuat dan yang sedang dipakai komponen (untuk debug dan tes). */
+export function runtimeInfo() {
+  const list = (entries) => [...new Set(entries)].map((r) => ({ api: r.api, version: r.version, src: r.src }));
+  return { loaded: list(runtimes.values()), active: list([...mounted].map((h) => h.entry).filter(Boolean)) };
 }
 
 /** Lokasi runtime bersama untuk satu entri manifest, atau null (bundle mandiri / framework lain). */
@@ -188,11 +280,7 @@ export function watchDev(base, name, onUpdate) {
   return () => events.close();
 }
 
-/** Ganti instance yang sedang tampil dengan bundle baru. State useState dibawa (komponen xp). */
-export async function swapInstance(el, instance, next, props) {
-  const mod = await loadBundle(next.src, next.sha256, next.runtime);
-  const restore = instance?.snapshot?.() ?? null;
-  instance?.unmount();
-  el.textContent = "";
-  return mod.render(el, props, { restore });
+/** Ganti instance yang sedang tampil dengan bundle baru (handle dari mountComponent). */
+export function swapInstance(handle, next) {
+  return handle.replace(next);
 }

@@ -37,24 +37,25 @@ const c = await remote("promo-slider", 4503, "9.9.9");
 // Halaman app di origin ketiga, memakai kode browser adapter apa adanya.
 const page = `<!doctype html><meta charset="utf-8"><div id="a"></div><div id="b"></div>
 <script type="module">
-import { loadBundle, loadedRuntimes, runtimeOf } from "/client.js";
+import { mountComponent, runtimeInfo, runtimeOf } from "/client.js";
 async function mount(base, name, el, props) {
   const entry = (await (await fetch(base + "/manifest.json")).json()).components[name];
-  const mod = await loadBundle(base + "/" + entry.web.file, entry.web.sha256, runtimeOf(base, entry.web));
-  mod.render(document.getElementById(el), props);
+  await mountComponent(document.getElementById(el), { src: base + "/" + entry.web.file, sha256: entry.web.sha256, runtime: runtimeOf(base, entry.web) }, props);
 }
-const second = new URLSearchParams(location.search).get("second") ?? "4502";
-if (second === "4503") {
-  // Remote dengan xp lebih baru dimuat duluan, lalu komponen dari xp yang lebih lama.
-  await mount("http://localhost:4503", "promo-slider", "b", {});
-  await mount("http://localhost:4501", "promo-modal", "a", { title: "Kelas IELTS", price: 150000, seats: 3 });
-} else {
-  await Promise.all([
-    mount("http://localhost:4501", "promo-modal", "a", { title: "Kelas IELTS", price: 150000, seats: 3 }),
-    mount("http://localhost:" + second, "promo-slider", "b", {}),
-  ]);
+const modal = () => mount("http://localhost:4501", "promo-modal", "a", { title: "Kelas IELTS", price: 150000, seats: 3 });
+const slider = (port) => () => mount("http://localhost:" + port, "promo-slider", "b", {});
+const scenario = new URLSearchParams(location.search).get("s");
+if (scenario === "sama") await Promise.all([modal(), slider(4502)()]);
+if (scenario === "baru-dulu") { await slider(4503)(); await modal(); }
+if (scenario === "bersamaan") await Promise.all([modal(), slider(4503)()]);
+if (scenario === "lama-dulu") {
+  await modal();
+  document.querySelector('[data-testid="open"]').click(); // ada state sebelum pindah runtime
+  await new Promise((r) => setTimeout(r, 0));
+  await slider(4503)();
+  await new Promise((r) => setTimeout(r, 50));
 }
-window.__runtimes = loadedRuntimes();
+window.__runtimes = runtimeInfo();
 document.body.dataset.ready = "true";
 </script>`;
 const app = createServer((req, res) => {
@@ -65,30 +66,38 @@ const app = createServer((req, res) => {
 
 const browser = await chromium.launch({ executablePath: process.env.CHROME ?? "/opt/pw-browsers/chromium" });
 try {
-  for (const second of ["4502", "4503"]) {
-  const p = await browser.newPage();
-  const errors = [];
-  p.on("pageerror", (e) => errors.push(e.message));
-  await p.goto(`http://localhost:4500/?second=${second}`);
-  await p.waitForSelector('body[data-ready="true"]');
-  const runtimes = await p.evaluate(() => performance.getEntriesByType("resource").map((e) => e.name).filter((n) => n.includes("xp-runtime")));
-  assert.equal(runtimes.length, 1, `runtime dimuat ${runtimes.length}x: ${runtimes.join(", ")}`);
+  const scenarios = {
+    sama: "versi xp sama",
+    "baru-dulu": "versi xp beda, yang baru dimuat duluan",
+    bersamaan: "versi xp beda, dimuat bersamaan",
+    "lama-dulu": "versi xp beda, yang lama dimuat duluan",
+  };
+  for (const [s, label] of Object.entries(scenarios)) {
+    const p = await browser.newPage();
+    const errors = [];
+    p.on("pageerror", (e) => errors.push(e.message));
+    await p.goto(`http://localhost:4500/?s=${s}`);
+    await p.waitForSelector('body[data-ready="true"]');
+    const { loaded, active } = await p.evaluate(() => window.__runtimes);
+    const fetched = await p.evaluate(() => performance.getEntriesByType("resource").filter((e) => e.name.includes("xp-runtime")).length);
+    assert.equal(active.length, 1, `${label}: runtime aktif ${active.map((r) => r.version).join(", ")}`);
+    if (s !== "sama") assert.equal(active[0].version, "9.9.9");
+    if (s !== "lama-dulu") assert.equal(fetched, 1, `${label}: runtime diunduh ${fetched}x`);
 
-  await p.getByTestId("open").click();
-  await p.getByTestId("plus").click();
-  assert.equal(await p.getByTestId("total").textContent(), "Total: Rp300.000");
-  await p.getByTestId("close").click();
-  await p.getByTestId("next").click();
-  assert.equal(await p.getByTestId("slide-title").textContent(), "TOEFL Prep");
-  assert.deepEqual(errors, []);
-  const used = await p.evaluate(() => window.__runtimes);
-  console.log(
-    second === "4502"
-      ? `✓ dua remote, versi xp sama: satu runtime (${runtimes[0].replace(/^https?:\/\/[^/]+\//, "")}), kedua komponen interaktif`
-      : `✓ dua remote, versi xp beda: runtime ${used.map((r) => r.version).join(", ")} dipakai kedua komponen, keduanya interaktif`,
-  );
-  if (second === "4503") assert.deepEqual(used.map((r) => r.version), ["9.9.9"]);
-  await p.close();
+    if (s === "lama-dulu") {
+      // Modal sudah terbuka sebelum komponen pindah ke runtime baru: state ikut pindah.
+      assert.equal(await p.locator('[role="dialog"]').isVisible(), true, "modal tetap terbuka setelah pindah runtime");
+    } else {
+      await p.getByTestId("open").click();
+    }
+    await p.getByTestId("plus").click();
+    assert.equal(await p.getByTestId("total").textContent(), "Total: Rp300.000");
+    await p.getByTestId("close").click();
+    await p.getByTestId("next").click();
+    assert.equal(await p.getByTestId("slide-title").textContent(), "TOEFL Prep");
+    assert.deepEqual(errors, []);
+    console.log(`✓ ${label}: ${fetched} runtime diunduh, 1 aktif (${active[0].version}), kedua komponen interaktif`);
+    await p.close();
   }
 } finally {
   await browser.close();

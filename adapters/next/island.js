@@ -2,7 +2,7 @@
 // Island client: tampilkan HTML hasil SSR, lalu muat bundle web di browser dan ambil alih
 // elemen yang sama (state, event). Props harus serializable (tanpa function).
 import { createElement, useEffect, useRef } from "react";
-import { loadBundle, swapInstance, watchDev } from "./client.js";
+import { mountComponent, watchDev } from "./client.js";
 
 export function XPIsland({ src, sha256, runtime, html, props, base, name, live }) {
   const ref = useRef(null);
@@ -13,12 +13,15 @@ export function XPIsland({ src, sha256, runtime, html, props, base, name, live }
   const propsKey = JSON.stringify(props);
 
   useEffect(() => {
+    if (instance.current) {
+      instance.current.update(props);
+      return;
+    }
     let cancelled = false;
-    loadBundle(src, sha256, runtime)
-      .then((mod) => {
-        if (cancelled || !ref.current) return;
-        if (instance.current) instance.current.update(props);
-        else instance.current = mod.render(ref.current, props);
+    mountComponent(ref.current, { src, sha256, runtime }, props)
+      .then((handle) => {
+        if (cancelled) return handle.unmount();
+        instance.current = handle;
         current.current = src;
         ref.current.dataset.xpReady = "true";
       })
@@ -34,7 +37,7 @@ export function XPIsland({ src, sha256, runtime, html, props, base, name, live }
     if (!live) return;
     return watchDev(base, name, async (next) => {
       if (!ref.current || !instance.current || next.src === current.current) return;
-      instance.current = await swapInstance(ref.current, instance.current, next, latestProps.current);
+      await instance.current.replace(next);
       current.current = next.src;
       ref.current.dataset.xpVersion = next.src;
     });

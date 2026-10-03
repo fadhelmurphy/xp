@@ -3,7 +3,7 @@
 import { loadBundle, runtimeOf } from "./client.js";
 import { verifyManifest } from "./verify.js";
 
-export { swapInstance, watchDev } from "./client.js";
+export { mountComponent, runtimeInfo, watchDev } from "./client.js";
 
 const PROTOCOL = 1;
 const manifests = new Map(); // base → { data, expires }

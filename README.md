@@ -112,7 +112,9 @@ Ukuran contoh yang ada di repo:
 Browser hanya mengunduh bundle `web`; bundle `ssr` dipakai server. Komponen xp memakai satu runtime bersama (`xp-runtime.<hash>.js`, 13 kB, 5,5 kB gzip) yang diunduh sekali per halaman, jadi setiap komponen xp tambahan hanya menambah 2-3 kB. Ini berlaku juga untuk komponen dari remote yang berbeda, termasuk yang di-build dengan versi xp berbeda:
 
 - Versi xp sama: file runtime-nya identik, dan adapter mengenalinya dari sha256-nya.
-- Versi xp berbeda: setiap runtime mencatat `api` dan versinya. Runtime yang lebih baru dengan `api` yang sama bisa menjalankan komponen yang di-build xp versi lebih lama, jadi runtime yang sudah dimuat dipakai lagi.
+- Versi xp berbeda: setiap runtime mencatat `api` dan versinya. Runtime yang lebih baru dengan `api` yang sama bisa menjalankan komponen yang di-build xp versi lebih lama.
+- Komponen yang dimuat bersamaan (misalnya semua komponen di satu halaman saat hydrate) dikumpulkan dulu, lalu hanya runtime versi tertinggi yang diunduh.
+- Kalau komponen yang butuh runtime lebih baru datang belakangan (misalnya dimuat saat scroll), runtime baru itu diunduh dan komponen yang sudah tampil dipindah ke sana, dengan state `useState` yang sama. Jadi tetap hanya satu runtime yang aktif. Runtime lama sudah telanjur terunduh, tapi tidak dipakai lagi.
 
 Kontraknya ada di [`runtime/api.json`](runtime/api.json): dalam satu `api`, export runtime hanya boleh bertambah. Kalau ada yang dihapus atau perilakunya berubah, `api` dinaikkan, dan remote dengan `api` berbeda memuat runtime masing-masing. Test memastikan runtime tidak melanggar daftar itu. Komponen React, Vue, dan Svelte membawa runtime framework-nya sendiri di setiap bundle.
 
@@ -127,7 +129,7 @@ npx github:fadhelmurphy/xp serve               # remote di :4400
 npm test                                        # 40 test
 npm run e2e                                     # tes app Next.js/Nuxt di Chromium (APP_URL=http://localhost:3300)
 npm run e2e:dev                                 # tes pratinjau xp dev di Chromium
-npm run e2e:remotes                             # dua remote (versi xp sama dan beda) di satu halaman, runtime dimuat sekali
+npm run e2e:remotes                             # dua remote dengan versi xp sama/beda dan urutan muat berbeda: satu runtime aktif
 node tests/e2e/consumer-dev.mjs                 # tes xp dev dengan next dev / nuxt dev (lihat isi file)
 ```
 
@@ -534,4 +536,4 @@ Yang belum:
 - Belum ada GIF demo untuk Android dan iOS.
 - Layout di mobile belum memakai Yoga, jadi hasilnya bisa sedikit berbeda dari web.
 - `dragAxis` di Android (Compose) dan iOS (SwiftUI) belum pernah dijalankan; logika sumbunya saja yang dites.
-- Kalau komponen dari xp versi lama dimuat lebih dulu, lalu datang komponen yang butuh runtime lebih baru, runtime baru ikut dimuat (dua runtime di halaman itu). Komponen sesudahnya memakai yang terbaru. Urutan sebaliknya cukup satu runtime.
+- Saat komponen dipindah ke runtime yang lebih baru, elemennya dirender ulang (state tetap, tapi elemen DOM-nya baru).
