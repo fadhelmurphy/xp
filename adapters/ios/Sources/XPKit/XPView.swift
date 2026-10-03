@@ -58,6 +58,8 @@ final class XPModel: ObservableObject {
 
     @Published private(set) var state: State = .loading
     @Published private(set) var revision = 0
+    /// Revisi setelah mount; node yang dibuat sesudahnya boleh menjalankan animasi `entering`.
+    private(set) var mountRevision = 0
     let tree = XPTree()
 
     private var engine: XPEngine?
@@ -79,6 +81,7 @@ final class XPModel: ObservableObject {
             let batches = try await engine.mount(props)
             mountedProps = props
             try apply(batches)
+            mountRevision = tree.revision
             state = .ready
             if latestProps != props { update(latestProps) }
         } catch {
@@ -246,6 +249,12 @@ struct XPRenderer {
         }
 
         var out = view
+        if s.transition > 0 {
+            out = AnyView(out.animation(animation(s), value: AnimatedValues(s)))
+        }
+        if let e = n.entering, n.createdAt > model.mountRevision {
+            out = AnyView(out.modifier(XPEnteringModifier(entering: e)))
+        }
         if case .column = slot, let a = s.alignSelf, a != "stretch" {
             out = AnyView(out.frame(maxWidth: .infinity, alignment: a == "center" ? .center : a == "flex-end" ? .trailing : .leading))
         }
@@ -302,6 +311,15 @@ struct XPRenderer {
         return out
     }
 
+    private func animation(_ s: XPStyle) -> Animation {
+        switch s.easing {
+        case "linear": return .linear(duration: s.transition)
+        case "ease-in": return .easeIn(duration: s.transition)
+        case "ease-out": return .easeOut(duration: s.transition)
+        default: return .easeInOut(duration: s.transition)
+        }
+    }
+
     private func horizontalAlign(_ v: String) -> HorizontalAlignment {
         switch v {
         case "center": return .center
@@ -347,6 +365,42 @@ struct XPRenderer {
         case ..<900: return .heavy
         default: return .black
         }
+    }
+}
+
+// MARK: - Animasi
+
+/// Nilai style yang dianimasikan; perubahan salah satunya memicu `.animation`.
+private struct AnimatedValues: Equatable {
+    let background: UInt32?
+    let borderColor: UInt32?
+    let color: UInt32?
+    let opacity: Double
+    let width: XPSize?
+    let height: XPSize?
+
+    init(_ s: XPStyle) {
+        background = s.background
+        borderColor = s.borderColor
+        color = s.color
+        opacity = s.opacity
+        width = s.width
+        height = s.height
+    }
+}
+
+/// Prop `entering`: node yang muncul setelah mount bergerak dari nilai awal ke posisi normal.
+private struct XPEnteringModifier: ViewModifier {
+    let entering: XPEntering
+    @State private var shown = false
+
+    func body(content: Content) -> some View {
+        content
+            .opacity(shown ? 1 : entering.opacity)
+            .offset(x: shown ? 0 : CGFloat(entering.translateX), y: shown ? 0 : CGFloat(entering.translateY))
+            .onAppear {
+                withAnimation(.easeOut(duration: entering.duration)) { shown = true }
+            }
     }
 }
 

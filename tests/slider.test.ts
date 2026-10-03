@@ -36,10 +36,21 @@ test("native (QuickJS): pindah slide lewat tombol dan titik, berputar di ujung",
   assert.equal(title(), "IELTS Intensif");
   assert.equal(counter(), "1 / 3");
 
+  const contentBefore = tree.byTestID("slide")!.children[0];
   press("next");
   assert.equal(title(), "TOEFL Prep");
   assert.equal(bg(), "#8250DF");
   assert.equal(counter(), "2 / 3");
+
+  // Animasi: style membawa transisi, konten slide adalah node BARU dengan `entering` dari kanan.
+  const slide = tree.byTestID("slide")!;
+  assert.equal((slide.props.style as Record<string, unknown>).transitionDuration, 350);
+  const content = tree.nodes.get(slide.children[0])!;
+  assert.notEqual(slide.children[0], contentBefore, "konten slide dibuat ulang (key berganti)");
+  assert.deepEqual(content.props.entering, { opacity: 0, translateX: 28, duration: 320 });
+  press("prev");
+  assert.deepEqual(tree.nodes.get(tree.byTestID("slide")!.children[0])!.props.entering, { opacity: 0, translateX: -28, duration: 320 }, "mundur: masuk dari kiri");
+  press("next");
 
   press("dot-2");
   assert.equal(title(), "Speaking Club");
@@ -77,8 +88,22 @@ test("web (DOM): klik tombol dan titik mengganti slide", async () => {
     await Promise.resolve();
   };
 
+  // Mount awal: tidak ada animasi masuk (konten SSR tidak boleh berkedip).
+  const firstContent = q("slide").firstElementChild as HTMLElement;
+  assert.equal(firstContent.style.opacity, "");
+  assert.match(q("slide").style.transition, /background-color 350ms ease-in-out/);
+
   await click("next");
   assert.equal(q("slide-title").textContent, "TOEFL Prep");
+  const content = q("slide").firstElementChild as HTMLElement;
+  assert.notEqual(content, firstContent, "konten slide elemen baru");
+  assert.equal(content.style.opacity, "0", "mulai dari opacity 0");
+  assert.match(content.style.transform, /translate\(28px, 0px\)/);
+  await new Promise((r) => setTimeout(r, 60)); // frame berikutnya
+  assert.equal(content.style.opacity, "");
+  assert.match(content.style.transition, /opacity 320ms ease-out, transform 320ms ease-out/);
+  assert.match(q("dot-1").style.transition, /width 250ms/);
+
   await click("dot-2");
   assert.equal(q("counter").textContent, "3 / 3");
   assert.equal(q("dot-2").style.width, "18px", "titik aktif melebar");

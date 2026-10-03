@@ -1,4 +1,5 @@
 // Slider promo: satu slide tampil, pindah lewat tombol ‹ › atau titik indikator.
+// Animasi: warna latar & titik aktif bertransisi, konten slide baru masuk dari arah navigasi.
 // Hanya memakai primitive yang ada, jadi jalan sama di web, Android, dan iOS.
 import { Pressable, Text, View, useState, type Style } from "@xp/runtime";
 
@@ -25,13 +26,18 @@ const navButton: Style = {
 
 export default function PromoSlider({ slides = DEFAULT_SLIDES }: Props) {
   const [index, setIndex] = useState(0);
+  // Arah perpindahan terakhir: 1 = maju (konten masuk dari kanan), -1 = mundur.
+  const [direction, setDirection] = useState(1);
   const count = slides.length;
   if (count === 0) return null;
 
   // Jumlah slide dari app host bisa berkurang; jaga index tetap di dalam rentang.
   const active = Math.min(index, count - 1);
   const current = slides[active];
-  const go = (to: number) => setIndex(((to % count) + count) % count);
+  const go = (to: number, dir: number) => {
+    setDirection(dir);
+    setIndex(((to % count) + count) % count);
+  };
 
   return (
     <View style={{ gap: 12 }}>
@@ -40,20 +46,24 @@ export default function PromoSlider({ slides = DEFAULT_SLIDES }: Props) {
         style={{
           height: 160,
           padding: 20,
-          gap: 4,
           borderRadius: 16,
           justifyContent: "flex-end",
           backgroundColor: current.color,
+          transitionDuration: 350,
+          transitionTimingFunction: "ease-in-out",
         }}
       >
-        <Text testID="slide-title" style={{ color: "#FFFFFF", fontSize: 22, fontWeight: "700" }}>
-          {current.title}
-        </Text>
-        <Text style={{ color: "rgba(255,255,255,0.85)", fontSize: 14 }}>{current.subtitle}</Text>
+        {/* key berganti → konten lama dilepas, konten baru dibuat dan menjalankan `entering`. */}
+        <View key={active} style={{ gap: 4 }} entering={{ opacity: 0, translateX: 28 * direction, duration: 320 }}>
+          <Text testID="slide-title" style={{ color: "#FFFFFF", fontSize: 22, fontWeight: "700" }}>
+            {current.title}
+          </Text>
+          <Text style={{ color: "rgba(255,255,255,0.85)", fontSize: 14 }}>{current.subtitle}</Text>
+        </View>
       </View>
 
       <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-        <Pressable testID="prev" style={navButton} onPress={() => go(active - 1)}>
+        <Pressable testID="prev" style={navButton} onPress={() => go(active - 1, -1)}>
           <Text style={{ fontSize: 18, color: "#1F2328" }}>‹</Text>
         </Pressable>
 
@@ -62,18 +72,19 @@ export default function PromoSlider({ slides = DEFAULT_SLIDES }: Props) {
             <Pressable
               key={i}
               testID={`dot-${i}`}
-              onPress={() => setIndex(i)}
+              onPress={() => go(i, i >= active ? 1 : -1)}
               style={{
                 width: i === active ? 18 : 8,
                 height: 8,
                 borderRadius: 4,
                 backgroundColor: i === active ? "#1F6FEB" : "#D0D7DE",
+                transitionDuration: 250,
               }}
             />
           ))}
         </View>
 
-        <Pressable testID="next" style={navButton} onPress={() => go(active + 1)}>
+        <Pressable testID="next" style={navButton} onPress={() => go(active + 1, 1)}>
           <Text style={{ fontSize: 18, color: "#1F2328" }}>›</Text>
         </Pressable>
       </View>

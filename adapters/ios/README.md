@@ -64,6 +64,8 @@ Fixture diperbarui dari root repo dengan `npm test && npm run sync-fixtures`.
 | `Image` | `AsyncImage` |
 | `Modal` | `.sheet` (detent medium/large) |
 
+Animasi: `transitionDuration` di style → `.animation(_:value:)` pada nilai yang berubah; prop `entering` → `opacity` + `offset` yang dianimasikan saat view muncul, hanya untuk node yang muncul setelah mount.
+
 ## Batasan versi ini
 - Layout memakai stack SwiftUI, belum Yoga. Flex dasar sudah didukung (direction, justify, align, gap, flex, padding, margin, ukuran, %), tapi belum `flexWrap` dan `position: absolute`. Lebar persen selain 100% diperlakukan sebagai lebar penuh.
 - `Modal` tampil sebagai sheet iOS, bukan dialog di tengah layar seperti di web/Android. Ini disengaja, karena sheet adalah pola modal standar iOS.

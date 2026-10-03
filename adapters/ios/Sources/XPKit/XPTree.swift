@@ -4,12 +4,15 @@ import Foundation
 public final class XPNode {
     public let id: Int
     public let type: String
+    /// Revisi tempat node ini muncul (dipakai untuk animasi `entering`).
+    public let createdAt: Int
     public internal(set) var props: [String: Any] = [:]
     public internal(set) var children: [Int] = []
 
-    init(id: Int, type: String) {
+    init(id: Int, type: String, createdAt: Int = 0) {
         self.id = id
         self.type = type
+        self.createdAt = createdAt
     }
 
     /// Key handler event, mis. props["onPress"] = {"$fn": "5:onPress"} → "5:onPress".
@@ -24,6 +27,25 @@ public final class XPNode {
     public var style: [String: Any] { props["style"] as? [String: Any] ?? [:] }
 
     public var testID: String? { string("testID") }
+
+    public var entering: XPEntering? {
+        (props["entering"] as? [String: Any]).map(XPEntering.init)
+    }
+}
+
+/// Animasi saat node muncul: dari nilai ini ke keadaan normal.
+public struct XPEntering: Equatable {
+    public var opacity = 1.0
+    public var translateX = 0.0
+    public var translateY = 0.0
+    public var duration = 0.25 // detik
+
+    init(_ m: [String: Any]) {
+        opacity = (m["opacity"] as? NSNumber)?.doubleValue ?? 1
+        translateX = (m["translateX"] as? NSNumber)?.doubleValue ?? 0
+        translateY = (m["translateY"] as? NSNumber)?.doubleValue ?? 0
+        duration = ((m["duration"] as? NSNumber)?.doubleValue ?? 250) / 1000
+    }
 }
 
 /// Menerapkan batch `create / props / children / delete`. Hanya Foundation, jadi bisa diuji di macOS.
@@ -73,7 +95,7 @@ public final class XPTree {
             case "create":
                 guard op.count >= 3, let type = op[2] as? String else { throw XPError.invalid("create tanpa type") }
                 guard XPTree.primitives.contains(type) else { throw XPError.unknownPrimitive(type) }
-                nodes[id] = XPNode(id: id, type: type)
+                nodes[id] = XPNode(id: id, type: type, createdAt: revision + 1)
             case "props":
                 guard op.count >= 3, let changes = op[2] as? [String: Any] else { throw XPError.invalid("props tanpa object") }
                 let n = try existing(id)

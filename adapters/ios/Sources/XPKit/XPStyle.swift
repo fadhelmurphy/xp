@@ -45,6 +45,9 @@ public struct XPStyle: Equatable {
     public var fontSize: Double?
     public var fontWeight: Int?
     public var textAlign: String?
+    /// Animasi perubahan style, dalam detik (0 = tanpa animasi).
+    public var transition = 0.0
+    public var easing = "ease"
 
     public init() {}
 
@@ -83,6 +86,8 @@ public struct XPStyle: Equatable {
         st.fontSize = num("fontSize")
         st.fontWeight = str("fontWeight").flatMap { Int($0) } ?? (s["fontWeight"] as? NSNumber)?.intValue
         st.textAlign = str("textAlign")
+        st.transition = (num("transitionDuration") ?? 0) / 1000
+        st.easing = str("transitionTimingFunction") ?? "ease"
         return st
     }
 

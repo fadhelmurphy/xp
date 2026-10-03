@@ -14,6 +14,7 @@ import { chromium } from "playwright-core";
 const APP = process.env.APP_URL ?? "http://localhost:3300";
 const OUT = process.env.OUT ?? "docs/demo.gif";
 const SCENARIO = process.env.SCENARIO ?? "modal";
+const FPS = Number(process.env.FPS ?? 12);
 const SIZE = { width: 480, height: 600 };
 
 // Kursor + efek klik, supaya interaksi terlihat di rekaman.
@@ -59,15 +60,15 @@ await pause(900);
 
 if (SCENARIO === "slider") {
   await tap("next");
-  await pause(300);
+  await pause(500);
   await tap("next");
-  await pause(300);
+  await pause(500);
   await tap("next"); // berputar ke slide pertama
-  await pause(400);
+  await pause(600);
   await tap("dot-2");
-  await pause(400);
+  await pause(600);
   await tap("prev");
-  await pause(900);
+  await pause(1000);
 } else {
   await tap("open");
   await pause(500);
@@ -86,7 +87,7 @@ mkdirSync(path.dirname(OUT), { recursive: true });
 execFileSync(process.env.FFMPEG ?? "ffmpeg", [
   "-y", "-loglevel", "error",
   "-ss", trimStart.toFixed(2), "-i", video,
-  "-vf", "fps=12,scale=480:-1:flags=lanczos,split[a][b];[a]palettegen=max_colors=96:stats_mode=diff[p];[b][p]paletteuse=dither=bayer:bayer_scale=4:diff_mode=rectangle",
+  "-vf", `fps=${FPS},scale=480:-1:flags=lanczos,split[a][b];[a]palettegen=max_colors=96:stats_mode=diff[p];[b][p]paletteuse=dither=bayer:bayer_scale=4:diff_mode=rectangle`,
   "-loop", "0", OUT,
 ]);
 rmSync(videoDir, { recursive: true, force: true });

@@ -1,6 +1,15 @@
 package dev.xp.android
 
 import android.util.Log
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.Easing
+import androidx.compose.animation.core.FastOutLinearInEasing
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.LinearOutSlowInEasing
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -29,6 +38,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -40,6 +50,8 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.TextStyle
@@ -97,6 +109,7 @@ fun XPView(
             holder.mutex.withLock {
                 holder.mountedProps = holder.latestProps
                 holder.apply(engine.mount(holder.latestProps))
+                holder.mountRevision = holder.tree.revision
             }
             holder.state = XPState.Ready
         } catch (c: CancellationException) {
@@ -147,10 +160,10 @@ fun XPView(
             is XPState.Failed -> error(s.error)
             XPState.Ready -> {
                 // ctx baru setiap revisi → Compose merender ulang node yang berubah.
-                val ctx = XPRenderCtx(holder.tree, holder.revision, dispatch)
+                val ctx = XPRenderCtx(holder.tree, holder.revision, holder.mountRevision, dispatch)
                 Column(Modifier.fillMaxWidth()) {
                     val slot = Slot.InColumn(this, stretch = true)
-                    holder.tree.root.children.forEach { XPNodeView(ctx, it, slot) }
+                    holder.tree.root.children.forEach { key(it) { XPNodeView(ctx, it, slot) } }
                 }
             }
         }
@@ -169,6 +182,7 @@ private class XPHolder {
     var engine: XPEngine? = null
     var disposed = false
     var mountedProps: String? = null
+    var mountRevision = 0
     var latestProps = "{}"
     var state by mutableStateOf<XPState>(XPState.Loading)
     var revision by mutableIntStateOf(0)
@@ -182,6 +196,8 @@ private class XPHolder {
 private data class XPRenderCtx(
     val tree: XPTree,
     val revision: Int,
+    /** Revisi setelah mount; node yang dibuat sesudahnya boleh menjalankan animasi `entering`. */
+    val mountRevision: Int,
     val dispatch: (String, List<Any?>) -> Unit,
 )
 
@@ -246,6 +262,58 @@ private fun Modifier.xpBox(s: XPStyle, interaction: Modifier = Modifier): Modifi
     return m
 }
 
+// --- animasi ---
+
+private fun easingOf(name: String): Easing = when (name) {
+    "linear" -> LinearEasing
+    "ease-in" -> FastOutLinearInEasing
+    "ease-out" -> LinearOutSlowInEasing
+    else -> FastOutSlowInEasing
+}
+
+private fun Color.argb(): Long = toArgb().toLong() and 0xFFFFFFFFL
+
+/** transitionDuration > 0 → nilai yang bisa dianimasikan bergerak halus ke target barunya. */
+@Composable
+private fun animated(s: XPStyle): XPStyle {
+    val ms = s.transitionMs.coerceAtLeast(0)
+    val easing = easingOf(s.easing)
+    // Selalu dipanggil (urutan composable harus tetap), durasi 0 = langsung.
+    val bg by animateColorAsState(Color(s.background ?: 0x00000000L), tween(ms, easing = easing), label = "xp-bg")
+    val border by animateColorAsState(Color(s.borderColor ?: 0xFF000000L), tween(ms, easing = easing), label = "xp-border")
+    val color by animateColorAsState(Color(s.color ?: 0xFF000000L), tween(ms, easing = easing), label = "xp-color")
+    val opacity by animateFloatAsState(s.opacity, tween(ms, easing = easing), label = "xp-opacity")
+    val width by animateFloatAsState((s.width as? XPSize.Dp)?.value ?: 0f, tween(ms, easing = easing), label = "xp-width")
+    val height by animateFloatAsState((s.height as? XPSize.Dp)?.value ?: 0f, tween(ms, easing = easing), label = "xp-height")
+    if (ms == 0) return s
+    return s.copy(
+        background = s.background?.let { bg.argb() },
+        borderColor = s.borderColor?.let { border.argb() },
+        color = s.color?.let { color.argb() },
+        opacity = opacity,
+        width = if (s.width is XPSize.Dp) XPSize.Dp(width) else s.width,
+        height = if (s.height is XPSize.Dp) XPSize.Dp(height) else s.height,
+    )
+}
+
+/** Prop `entering`: node yang muncul setelah mount bergerak dari nilai awal ke posisi normal. */
+@Composable
+private fun Modifier.entering(node: XPNode, ctx: XPRenderCtx): Modifier {
+    val e = node.entering()
+    val play = e != null && node.createdAt > ctx.mountRevision
+    val progress = remember(node.id) { Animatable(if (play) 0f else 1f) }
+    LaunchedEffect(node.id, play) {
+        if (play) progress.animateTo(1f, tween(e!!.durationMs, easing = LinearOutSlowInEasing))
+    }
+    if (e == null) return this
+    return graphicsLayer {
+        val p = progress.value
+        alpha = e.opacity + (1f - e.opacity) * p
+        translationX = (e.translateX * (1f - p)).dp.toPx()
+        translationY = (e.translateY * (1f - p)).dp.toPx()
+    }
+}
+
 private fun Modifier.testTagOf(node: XPNode): Modifier = node.string("testID")?.let { this.testTag(it) } ?: this
 
 // --- pemetaan primitive → Compose ---
@@ -253,8 +321,9 @@ private fun Modifier.testTagOf(node: XPNode): Modifier = node.string("testID")?.
 @Composable
 private fun XPNodeView(ctx: XPRenderCtx, id: Int, slot: Slot) {
     val node = ctx.tree[id]
-    val style = remember(node.props["style"]) { XPStyle.parse(node.style()) }
-    val base = slot.modifier(style).testTagOf(node)
+    val parsed = remember(node.props["style"]) { XPStyle.parse(node.style()) }
+    val style = animated(parsed)
+    val base = slot.modifier(style).testTagOf(node).entering(node, ctx)
 
     when (node.type) {
         "View" -> XPContainer(ctx, node, style, base.xpBox(style))
@@ -291,12 +360,12 @@ private fun XPContainer(ctx: XPRenderCtx, node: XPNode, style: XPStyle, modifier
     if (style.direction == "row") {
         Row(modifier, horizontalArrangement = rowArrangement(style), verticalAlignment = rowAlign(style.alignItems)) {
             val slot = Slot.InRow(this)
-            node.children.forEach { XPNodeView(ctx, it, slot) }
+            node.children.forEach { key(it) { XPNodeView(ctx, it, slot) } }
         }
     } else {
         Column(modifier, verticalArrangement = columnArrangement(style), horizontalAlignment = columnAlign(style.alignItems)) {
             val slot = Slot.InColumn(this, stretch = style.alignItems == "stretch")
-            node.children.forEach { XPNodeView(ctx, it, slot) }
+            node.children.forEach { key(it) { XPNodeView(ctx, it, slot) } }
         }
     }
 }
@@ -395,7 +464,7 @@ private fun XPModal(ctx: XPRenderCtx, node: XPNode) {
         Box(Modifier.fillMaxWidth().padding(16.dp).testTagOf(node), contentAlignment = Alignment.Center) {
             Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
                 val slot = Slot.InColumn(this, stretch = false)
-                node.children.forEach { XPNodeView(ctx, it, slot) }
+                node.children.forEach { key(it) { XPNodeView(ctx, it, slot) } }
             }
         }
     }

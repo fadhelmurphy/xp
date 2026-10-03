@@ -74,6 +74,8 @@ Tes ini memutar ulang sesi `promo-modal.session.json`, yaitu rekaman operasi UI 
 | `Image` | Coil `AsyncImage` |
 | `Modal` | `Dialog` |
 
+Animasi: `transitionDuration` di style → `animateColorAsState`/`animateFloatAsState`; prop `entering` → `graphicsLayer` (alpha + translasi) yang dijalankan hanya untuk node yang muncul setelah mount.
+
 ## Batasan versi ini
 - Layout memakai Column/Row Compose, belum Yoga. Flex dasar sudah didukung (direction, justify, align, gap, flex, padding, margin, ukuran, %), tapi belum `flexWrap` dan `position: absolute`.
 - Satu QuickJS per `XPView`. Untuk banyak komponen di satu layar, nanti perlu berbagi runtime.

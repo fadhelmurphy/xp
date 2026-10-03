@@ -12,7 +12,15 @@ const EVENTS: Record<string, [string, (e: Event) => unknown[]]> = {
   onRequestClose: ["click", () => []], // klik backdrop Modal
 };
 
+type EnteringProp = { opacity?: number; translateX?: number; translateY?: number; duration?: number };
+
+const nextFrame = (fn: () => void) =>
+  typeof requestAnimationFrame === "function" ? requestAnimationFrame(() => requestAnimationFrame(fn)) : setTimeout(fn, 32);
+
 class DomHost implements Host {
+  /** false selama render pertama: animasi `entering` dilewati supaya konten SSR tidak berkedip. */
+  ready = false;
+  private fresh = new Set<number>();
   private nodes = new Map<number, Node>();
   private props = new Map<number, Record<string, any>>();
   private types = new Map<number, string>();
@@ -33,6 +41,7 @@ class DomHost implements Host {
     if (!tag) throw new Error(`Primitive tidak dikenal: ${type}`);
     const el = document.createElement(tag);
     this.nodes.set(id, el);
+    if (this.ready) this.fresh.add(id);
 
     for (const [prop, [evt, args]] of Object.entries(EVENTS)) {
       el.addEventListener(evt, (e) => {
@@ -66,6 +75,24 @@ class DomHost implements Host {
       if (k === "value") (el as HTMLInputElement).value = v; // property, bukan atribut
       else el.setAttribute(k, v);
     }
+    if (this.fresh.delete(id) && p.entering) this.enter(el, p.entering as EnteringProp);
+  }
+
+  /** Mulai dari nilai `entering`, lalu transisi ke style normal. */
+  private enter(el: HTMLElement, e: EnteringProp) {
+    const duration = e.duration ?? 250;
+    const finalOpacity = el.style.opacity;
+    const finalTransform = el.style.transform;
+    const finalTransition = el.style.transition;
+    el.style.transition = "none";
+    if (e.opacity !== undefined) el.style.opacity = String(e.opacity);
+    el.style.transform = `translate(${e.translateX ?? 0}px, ${e.translateY ?? 0}px)`;
+    nextFrame(() => {
+      const enterTransition = `opacity ${duration}ms ease-out, transform ${duration}ms ease-out`;
+      el.style.transition = finalTransition ? `${finalTransition}, ${enterTransition}` : enterTransition;
+      el.style.opacity = finalOpacity;
+      el.style.transform = finalTransform;
+    });
   }
 
   setChildren(id: number, children: number[]) {
@@ -95,8 +122,10 @@ class DomHost implements Host {
  */
 export function mount(container: HTMLElement, Component: ComponentFn, props: Record<string, unknown> = {}) {
   container.textContent = "";
-  const root = createRoot(new DomHost(container));
+  const host = new DomHost(container);
+  const root = createRoot(host);
   root.render(jsx(Component, props));
+  host.ready = true;
   return {
     update: (next: Record<string, unknown>) => root.render(jsx(Component, next)),
     unmount: () => root.unmount(),

@@ -5,7 +5,7 @@ package dev.xp.android
  * Murni Kotlin (tanpa Android/Compose) supaya bisa diuji di JVM.
  * Implementasi acuannya: sdk-reference/tree.ts.
  */
-class XPNode(val id: Int, val type: String) {
+class XPNode(val id: Int, val type: String, val createdAt: Int = 0) {
     val props: MutableMap<String, Any?> = LinkedHashMap()
     var children: List<Int> = emptyList()
 
@@ -18,6 +18,26 @@ class XPNode(val id: Int, val type: String) {
 
     @Suppress("UNCHECKED_CAST")
     fun style(): Map<String, Any?> = props["style"] as? Map<String, Any?> ?: emptyMap()
+
+    @Suppress("UNCHECKED_CAST")
+    fun entering(): XPEntering? = (props["entering"] as? Map<String, Any?>)?.let { XPEntering.parse(it) }
+}
+
+/** Animasi saat node muncul: dari nilai ini ke keadaan normal. */
+data class XPEntering(
+    val opacity: Float = 1f,
+    val translateX: Float = 0f,
+    val translateY: Float = 0f,
+    val durationMs: Int = 250,
+) {
+    companion object {
+        fun parse(m: Map<String, Any?>) = XPEntering(
+            opacity = (m["opacity"] as? Number)?.toFloat() ?: 1f,
+            translateX = (m["translateX"] as? Number)?.toFloat() ?: 0f,
+            translateY = (m["translateY"] as? Number)?.toFloat() ?: 0f,
+            durationMs = (m["duration"] as? Number)?.toInt() ?: 250,
+        )
+    }
 }
 
 class XPTree {
@@ -57,7 +77,8 @@ class XPTree {
                 "create" -> {
                     val type = op[2] as String
                     require(type in PRIMITIVES) { "primitive '$type' tidak didukung SDK ini" }
-                    nodes[id] = XPNode(id, type)
+                    // createdAt = revisi tempat node ini muncul (dipakai untuk animasi `entering`).
+                    nodes[id] = XPNode(id, type, createdAt = revision + 1)
                 }
                 "props" -> {
                     val n = get(id)

@@ -25,6 +25,9 @@ const BASE: Record<string, Record<string, string>> = {
   },
 };
 
+// Sama dengan yang dianimasikan host native.
+const ANIMATED = ["background-color", "opacity", "width", "height", "border-color", "color"];
+
 const UNITLESS = new Set(["flex", "flexGrow", "flexShrink", "opacity", "fontWeight", "zIndex"]);
 
 const kebab = (k: string) => k.replace(/[A-Z]/g, (m) => "-" + m.toLowerCase());
@@ -49,6 +52,14 @@ export function styleToCss(type: string, style: Style | undefined, extra: Record
   if (s.borderWidth !== undefined) css["border-style"] = "solid";
   if (type === "ScrollView" && extra.horizontal) css["flex-direction"] = "row";
   if (type === "Modal" && !extra.visible) css.display = "none";
+
+  const duration = s.transitionDuration;
+  const easing = s.transitionTimingFunction ?? "ease";
+  delete s.transitionDuration;
+  delete s.transitionTimingFunction;
+  if (typeof duration === "number" && duration > 0) {
+    css.transition = ANIMATED.map((p) => `${p} ${duration}ms ${easing}`).join(", ");
+  }
 
   for (const [k, v] of Object.entries(s)) {
     if (v === undefined || v === null) continue;

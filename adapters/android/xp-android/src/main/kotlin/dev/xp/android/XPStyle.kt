@@ -39,6 +39,9 @@ data class XPStyle(
     val fontWeight: Int? = null,
     val lineHeight: Float? = null,
     val textAlign: String? = null,
+    // animasi perubahan style
+    val transitionMs: Int = 0,
+    val easing: String = "ease",
 ) {
     companion object {
         fun parse(s: Map<String, Any?>): XPStyle {
@@ -74,6 +77,8 @@ data class XPStyle(
                 fontWeight = str("fontWeight")?.toIntOrNull() ?: (s["fontWeight"] as? Number)?.toInt(),
                 lineHeight = num("lineHeight"),
                 textAlign = str("textAlign"),
+                transitionMs = num("transitionDuration")?.toInt() ?: 0,
+                easing = str("transitionTimingFunction") ?: "ease",
             )
         }
 

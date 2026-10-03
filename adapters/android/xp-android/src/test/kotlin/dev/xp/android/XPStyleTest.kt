@@ -49,4 +49,12 @@ class XPStyleTest {
     fun fontWeightAsString() {
         assertEquals(700, XPStyle.parse(mapOf("fontWeight" to "700")).fontWeight)
     }
+
+    @Test
+    fun transition() {
+        val s = XPStyle.parse(mapOf("transitionDuration" to 300.0, "transitionTimingFunction" to "ease-out"))
+        assertEquals(300, s.transitionMs)
+        assertEquals("ease-out", s.easing)
+        assertEquals(0, XPStyle.parse(emptyMap()).transitionMs)
+    }
 }

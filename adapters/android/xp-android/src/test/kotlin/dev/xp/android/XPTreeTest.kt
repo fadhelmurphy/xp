@@ -83,4 +83,17 @@ class XPTreeTest {
     fun rejectsUnknownPrimitive() {
         XPTree().applyBatches("""[{"v":1,"ops":[["create",1,"Video"]]}]""")
     }
+
+    @Test
+    fun createdAtAndEntering() {
+        val tree = XPTree()
+        tree.applyBatches("""[{"v":1,"ops":[["create",1,"View"],["children",0,[1]]]}]""")
+        tree.applyBatches(
+            """[{"v":1,"ops":[["create",2,"Text"],["props",2,{"entering":{"opacity":0,"translateX":24,"duration":280}}],["children",1,[2]]]}]""",
+        )
+        assertEquals(1, tree[1].createdAt)
+        assertEquals(2, tree[2].createdAt)
+        assertEquals(XPEntering(opacity = 0f, translateX = 24f, durationMs = 280), tree[2].entering())
+        assertEquals(null, tree[1].entering())
+    }
 }

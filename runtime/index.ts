@@ -38,10 +38,28 @@ export type Style = {
   fontWeight?: "400" | "500" | "600" | "700";
   lineHeight?: number;
   textAlign?: "left" | "center" | "right";
+  /**
+   * Animasi perubahan style (ms). Yang dianimasikan: backgroundColor, opacity, width, height,
+   * borderColor, color. Web → CSS transition, Android → animate*AsState, iOS → .animation.
+   */
+  transitionDuration?: number;
+  transitionTimingFunction?: "ease" | "linear" | "ease-in" | "ease-out" | "ease-in-out";
+};
+
+/**
+ * Animasi saat elemen muncul (setelah komponen ter-mount): dari nilai ini ke style normal.
+ * Cocok dipakai bersama `key` yang berganti, mis. konten slide baru.
+ */
+export type Entering = {
+  opacity?: number;
+  translateX?: number;
+  translateY?: number;
+  /** ms, default 250 */
+  duration?: number;
 };
 
 type Children = { children?: unknown };
-type Base = { style?: Style; testID?: string };
+type Base = { style?: Style; testID?: string; entering?: Entering };
 
 export type ViewProps = Base & Children;
 export type TextProps = Base & Children & { numberOfLines?: number };

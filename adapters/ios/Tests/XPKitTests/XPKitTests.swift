@@ -73,6 +73,17 @@ final class XPTreeTests: XCTestCase {
         XCTAssertEqual(tree.text(tree.root), "3")
     }
 
+    func testCreatedAtAndEntering() throws {
+        let tree = XPTree()
+        try tree.applyBatches(#"[{"v":1,"ops":[["create",1,"View"],["children",0,[1]]]}]"#)
+        try tree.applyBatches(#"[{"v":1,"ops":[["create",2,"Text"],["props",2,{"entering":{"opacity":0,"translateX":24,"duration":280}}],["children",1,[2]]]}]"#)
+        XCTAssertEqual(tree.node(1)?.createdAt, 1)
+        XCTAssertEqual(tree.node(2)?.createdAt, 2)
+        XCTAssertEqual(tree.node(2)?.entering?.translateX, 24)
+        XCTAssertEqual(tree.node(2)?.entering?.duration ?? 0, 0.28, accuracy: 0.0001)
+        XCTAssertNil(tree.node(1)?.entering)
+    }
+
     func testRejectsUnknownProtocolAndPrimitive() {
         XCTAssertThrowsError(try XPTree().applyBatches(#"[{"v":2,"ops":[]}]"#))
         XCTAssertThrowsError(try XPTree().applyBatches(#"[{"v":1,"ops":[["create",1,"Video"]]}]"#))
@@ -112,6 +123,13 @@ final class XPStyleTests: XCTestCase {
         XCTAssertEqual(XPStyle.parseColor("rgba(0,0,0,.45)"), 0x7300_0000)
         XCTAssertEqual(XPStyle.parseColor("transparent"), 0)
         XCTAssertNil(XPStyle.parseColor("hsl(0, 0%, 0%)"))
+    }
+
+    func testTransition() {
+        let s = XPStyle.parse(["transitionDuration": 300, "transitionTimingFunction": "ease-out"])
+        XCTAssertEqual(s.transition, 0.3, accuracy: 0.0001)
+        XCTAssertEqual(s.easing, "ease-out")
+        XCTAssertEqual(XPStyle.parse([:]).transition, 0)
     }
 
     func testQuoteIsSafeJSLiteral() {

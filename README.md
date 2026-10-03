@@ -40,6 +40,22 @@ export default function PromoModal({ title }: { title: string }) {
 - Hanya boleh memakai primitive: `View`, `Text`, `Image`, `Pressable`, `ScrollView`, `TextInput`, `Modal`. Tag HTML ditolak oleh TypeScript.
 - Di device tidak ada `document`, `window`, `fetch`, maupun `Intl`. Build memberi peringatan kalau bundle native memakainya.
 
+### Animasi
+
+Animasi ditulis secara deklaratif. JS hanya menentukan nilai akhir, lalu tiap platform menjalankan animasinya sendiri (CSS transition di web, `animate*AsState` di Android, `.animation` di iOS), jadi tetap mulus di device.
+
+```tsx
+// 1. Transisi perubahan style: backgroundColor, opacity, width, height, borderColor, color
+<View style={{ backgroundColor: active ? "#1F6FEB" : "#D0D7DE", width: active ? 18 : 8,
+               transitionDuration: 250, transitionTimingFunction: "ease-in-out" }} />
+
+// 2. Animasi masuk: elemen yang muncul setelah mount bergerak dari nilai ini ke posisi normal.
+//    Pakai bersama `key` yang berganti untuk konten yang diganti (mis. slide baru).
+<View key={slideIndex} entering={{ opacity: 0, translateX: 28, duration: 320 }}>…</View>
+```
+
+`entering` tidak dijalankan saat render pertama, supaya konten hasil SSR tidak berkedip saat hydrate. Animasi yang mengikuti jari (gesture) belum didukung.
+
 ## Contoh komponen
 
 Ada di folder [`examples/`](examples). Keduanya hanya memakai primitive dan `style`, jadi jalan sama di web, Android, dan iOS.
@@ -47,7 +63,7 @@ Ada di folder [`examples/`](examples). Keduanya hanya memakai primitive dan `sty
 | Komponen | Isi |
 |---|---|
 | [`promo-modal`](examples/promo-modal.tsx) | Kartu promo + modal pendaftaran: state, kondisional, tombol nonaktif, hitung total |
-| [`promo-slider`](examples/promo-slider.tsx) | Slider promo: tombol ‹ ›, titik indikator yang bisa diklik, berputar di ujung, slide bisa diganti lewat props |
+| [`promo-slider`](examples/promo-slider.tsx) | Slider promo: tombol ‹ ›, titik indikator yang bisa diklik, berputar di ujung, slide bisa diganti lewat props. Beranimasi: warna latar dan titik aktif bertransisi, konten slide baru masuk dari arah navigasi |
 
 ![Demo promo-slider di app Next.js](docs/demo-slider.gif)
 
@@ -56,12 +72,16 @@ import { Pressable, Text, View, useState } from "@xp/runtime";
 
 export default function PromoSlider({ slides = DEFAULT_SLIDES }: Props) {
   const [index, setIndex] = useState(0);
+  const [direction, setDirection] = useState(1); // 1 = maju, -1 = mundur
   const active = Math.min(index, slides.length - 1);
   const current = slides[active];
   return (
     <View style={{ gap: 12 }}>
-      <View style={{ height: 160, padding: 20, borderRadius: 16, justifyContent: "flex-end", backgroundColor: current.color }}>
-        <Text style={{ color: "#FFFFFF", fontSize: 22, fontWeight: "700" }}>{current.title}</Text>
+      <View style={{ height: 160, padding: 20, borderRadius: 16, justifyContent: "flex-end",
+                     backgroundColor: current.color, transitionDuration: 350 }}>
+        <View key={active} entering={{ opacity: 0, translateX: 28 * direction, duration: 320 }}>
+          <Text style={{ color: "#FFFFFF", fontSize: 22, fontWeight: "700" }}>{current.title}</Text>
+        </View>
       </View>
       {/* tombol ‹ ›, titik indikator, penghitung: lihat examples/promo-slider.tsx */}
     </View>
