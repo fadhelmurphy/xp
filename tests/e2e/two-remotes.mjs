@@ -38,8 +38,10 @@ const c = await remote("promo-slider", 4503, "9.9.9");
 const page = `<!doctype html><meta charset="utf-8"><div id="a"></div><div id="b"></div>
 <script type="module">
 import { mountComponent, runtimeInfo, runtimeOf } from "/client.js";
+// Seperti adapter: info bundle (dari manifest) sudah ada sebelum komponen di-mount.
+const manifests = Object.fromEntries(await Promise.all([4501, 4502, 4503].map(async (port) => [port, await (await fetch("http://localhost:" + port + "/manifest.json")).json()])));
 async function mount(base, name, el, props) {
-  const entry = (await (await fetch(base + "/manifest.json")).json()).components[name];
+  const entry = manifests[base.split(":").pop()].components[name];
   await mountComponent(document.getElementById(el), { src: base + "/" + entry.web.file, sha256: entry.web.sha256, runtime: runtimeOf(base, entry.web) }, props);
 }
 const modal = () => mount("http://localhost:4501", "promo-modal", "a", { title: "Kelas IELTS", price: 150000, seats: 3 });
@@ -52,6 +54,7 @@ if (scenario === "lama-dulu") {
   await modal();
   document.querySelector('[data-testid="open"]').click(); // ada state sebelum pindah runtime
   await new Promise((r) => setTimeout(r, 0));
+  window.__before = { dialog: document.querySelector('[role="dialog"]'), total: document.querySelector('[data-testid="total"]') };
   await slider(4503)();
   await new Promise((r) => setTimeout(r, 50));
 }
@@ -87,6 +90,10 @@ try {
     if (s === "lama-dulu") {
       // Modal sudah terbuka sebelum komponen pindah ke runtime baru: state ikut pindah.
       assert.equal(await p.locator('[role="dialog"]').isVisible(), true, "modal tetap terbuka setelah pindah runtime");
+      assert.ok(
+        await p.evaluate(() => window.__before.dialog === document.querySelector('[role="dialog"]') && window.__before.total === document.querySelector('[data-testid="total"]')),
+        "elemen DOM yang sama dipakai setelah pindah runtime",
+      );
     } else {
       await p.getByTestId("open").click();
     }
@@ -96,7 +103,7 @@ try {
     await p.getByTestId("next").click();
     assert.equal(await p.getByTestId("slide-title").textContent(), "TOEFL Prep");
     assert.deepEqual(errors, []);
-    console.log(`✓ ${label}: ${fetched} runtime diunduh, 1 aktif (${active[0].version}), kedua komponen interaktif`);
+    console.log(`✓ ${label}: ${fetched} runtime diunduh, 1 aktif (${active[0].version}), kedua komponen interaktif${s === "lama-dulu" ? ", elemen DOM & state tetap saat pindah runtime" : ""}`);
     await p.close();
   }
 } finally {

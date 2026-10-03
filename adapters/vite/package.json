@@ -1,6 +1,6 @@
 {
   "name": "@xp/vite",
-  "version": "0.8.0",
+  "version": "0.9.0",
   "description": "Inti adapter xp untuk framework berbasis Vite (Nuxt, SvelteKit, ...): import \"xp:ui/nama\"",
   "type": "module",
   "exports": {

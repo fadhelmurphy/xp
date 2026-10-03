@@ -82,8 +82,12 @@ async function load() {
   const runtime = entry.web.runtime ? evaluate(await (await fetch("/" + entry.web.runtime.file)).text()).modules : {};
   const module = { exports: evaluate(await (await fetch("/" + entry.web.file)).text(), (id) => runtime[id]) };
   const restore = handle && handle.snapshot ? handle.snapshot() : null;
-  if (handle) handle.unmount();
-  app.textContent = "";
+  // Komponen xp: lepas tanpa membuang DOM, lalu bundle baru meng-hydrate elemen yang sama.
+  if (handle && handle.release) handle.release();
+  else if (handle) {
+    handle.unmount();
+    app.textContent = "";
+  }
   handle = module.exports.render(app, PROPS, { restore });
   file = entry.web.file;
   document.body.dataset.file = file;

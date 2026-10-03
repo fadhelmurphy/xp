@@ -184,3 +184,43 @@ test("native: reload bundle membawa state lewat XP.snapshot", async () => {
   a.vm.dispose();
   b.vm.dispose();
 });
+
+test("web: pindah ke runtime lain memakai elemen DOM yang sama dan state tetap", async () => {
+  const dom = new JSDOM(`<div id="app"></div>`);
+  Object.assign(globalThis as any, { window: dom.window, document: dom.window.document, Node: dom.window.Node });
+  // Dua instance runtime terpisah, seperti runtime lama dan runtime baru di halaman yang sama.
+  const runtimeCode = readFileSync(`dist/${modal.web.runtime.file}`, "utf8");
+  const componentCode = readFileSync(`dist/${modal.web.file}`, "utf8");
+  const withRuntime = () => {
+    const rt = evaluate(runtimeCode).modules;
+    return evaluate(componentCode, (id) => rt[id]);
+  };
+  const oldVersion = withRuntime();
+  const newVersion = withRuntime();
+  const props = { title: "Kelas IELTS", price: 150000, seats: 3 };
+  const app = dom.window.document.getElementById("app")!;
+  const q = (id: string) => app.querySelector(`[data-testid="${id}"]`) as HTMLElement;
+
+  const first = oldVersion.render(app, props);
+  q("open").click();
+  await sleep(0);
+  q("plus").click();
+  await sleep(0);
+  const total = q("total");
+  const dialog = app.querySelector('[role="dialog"]');
+  assert.equal(total.textContent, "Total: Rp300.000");
+
+  const restore = first.snapshot();
+  first.release();
+  const second = newVersion.render(app, props, { restore });
+  assert.equal(q("total"), total, "elemen yang sama dipakai runtime baru");
+  assert.equal(app.querySelector('[role="dialog"]'), dialog);
+  assert.equal(total.textContent, "Total: Rp300.000", "state tetap");
+
+  // Event hanya ditangani runtime baru (listener runtime lama sudah berhenti).
+  q("plus").click();
+  await sleep(0);
+  assert.equal(total.textContent, "Total: Rp450.000");
+  assert.equal(q("qty").textContent, "Peserta: 3");
+  second.unmount();
+});

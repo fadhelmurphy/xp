@@ -111,6 +111,8 @@ export function compareVersions(a, b) {
 let lastRuntimeId = 0;
 const runtimes = new Map(); // sha256 (atau src) → entry { id, api, version, promise }
 const batches = new Map(); // api → { requests, promise, resolve }
+// Permintaan runtime yang datang dalam rentang ini dianggap bersamaan (sekitar satu frame).
+const BATCH_MS = 16;
 
 function newestFor(api, version) {
   return [...runtimes.values()]
@@ -152,7 +154,7 @@ function chooseRuntime(runtime) {
       const entry = newestFor(best.api, best.version) ?? startRuntime(best);
       batch.resolve(entry);
       upgradeMounted(entry);
-    }, 0);
+    }, BATCH_MS);
   }
   batch.requests.push(runtime);
   return batch.promise;
@@ -188,8 +190,14 @@ async function rerender(handle, bundle, entry) {
   const mod = await moduleFor(bundle.src, bundle.sha256, entry);
   if (!mounted.has(handle)) return;
   const restore = handle.snapshot();
-  handle.inner.unmount();
-  handle.el.textContent = "";
+  if (handle.inner.release) {
+    // Elemen DOM dibiarkan; bundle baru me-mount dengan state yang sama dan meng-hydrate elemen itu.
+    // Kalau hasilnya berbeda (mis. kode komponen berubah saat xp dev), isinya diganti.
+    handle.inner.release();
+  } else {
+    handle.inner.unmount();
+    handle.el.textContent = "";
+  }
   handle.inner = mod.render(handle.el, handle.props, { restore });
   handle.bundle = bundle;
   handle.entry = entry;

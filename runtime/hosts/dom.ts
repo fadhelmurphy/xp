@@ -21,6 +21,8 @@ const nextFrame = (fn: () => void) =>
 class DomHost implements Host {
   /** false selama render pertama: animasi `entering` dilewati supaya konten SSR tidak berkedip. */
   ready = false;
+  /** true setelah release(): tree dilepas tanpa menyentuh DOM, listener lama berhenti bekerja. */
+  detached = false;
   private fresh = new Set<number>();
   private nodes = new Map<number, Node>();
   private props = new Map<number, Record<string, any>>();
@@ -53,6 +55,7 @@ class DomHost implements Host {
     let swiped = false;
     for (const [prop, [evt, args]] of Object.entries(EVENTS)) {
       el.addEventListener(evt, (e) => {
+        if (this.detached) return;
         if (prop === "onRequestClose" && e.target !== el) return; // hanya klik di backdrop
         const fn = this.handlers.get(`${id}:${prop}`);
         if (!fn) return; // elemen tanpa handler: biarkan event naik ke parent (mis. Text di dalam Pressable)
@@ -69,6 +72,7 @@ class DomHost implements Host {
     // dragAxis: selama digeser, elemen ikut pointer di sumbu itu, lalu kembali saat dilepas.
     // Gerakan dipantau di window supaya pointer yang keluar dari elemen tetap terhitung.
     el.addEventListener("pointerdown", (down) => {
+      if (this.detached) return;
       const axis = this.props.get(id)?.dragAxis as "x" | "y" | undefined;
       if (!this.handlers.has(`${id}:onSwipe`) && !axis) return;
       if ((down as any).__xpDrag) return; // elemen yang lebih dalam sudah menangani
@@ -157,22 +161,32 @@ class DomHost implements Host {
    */
   hydrate(container: HTMLElement): boolean {
     const pairs: [number, Node][] = [];
-    const extraText: [Text, number][] = []; // node teks yang perlu disisipkan setelah node teks SSR
+    // Teks yang tidak bisa dipasangkan satu-satu: node teks lama diganti node teks baru.
+    const textSwaps: { parent: Node; before: Node | null; remove: Node[]; insert: number[] }[] = [];
+    const empties: Node[] = [];
     const match = (id: number, dom: Node): boolean => {
       const kids = this.children.get(id) ?? [];
-      const domKids = [...dom.childNodes].filter((n) => n.nodeType === 1 || n.nodeType === 3);
+      const domKids = [...dom.childNodes].filter((n) => {
+        if (n.nodeType === 3 && !n.textContent) return empties.push(n), false; // teks kosong diabaikan
+        return n.nodeType === 1 || n.nodeType === 3;
+      });
       let d = 0;
       for (let i = 0; i < kids.length; ) {
         if (this.types.get(kids[i]) === TEXT) {
-          // Teks berurutan ("Total: " + angka) menjadi satu node teks di HTML SSR.
+          // Teks berurutan ("Total: " + angka): di HTML SSR menjadi satu node teks, di DOM hasil
+          // render client tetap terpisah. Cocokkan isinya, bukan jumlah node-nya.
           const run: number[] = [];
           while (i < kids.length && this.types.get(kids[i]) === TEXT) run.push(kids[i++]);
           const text = run.map((k) => String(this.props.get(k)!.value ?? "")).join("");
-          if (!text) continue; // teks kosong tidak menghasilkan node di SSR
-          const node = domKids[d++];
-          if (!node || node.nodeType !== 3 || node.textContent !== text) return false;
-          pairs.push([run[0], node]);
-          run.slice(1).forEach((k) => extraText.push([node as Text, k]));
+          const nodes: Node[] = [];
+          let seen = "";
+          while (seen.length < text.length && domKids[d]?.nodeType === 3) {
+            seen += domKids[d].textContent;
+            nodes.push(domKids[d++]);
+          }
+          if (seen !== text) return false;
+          if (nodes.length === run.length) run.forEach((k, j) => pairs.push([k, nodes[j]]));
+          else textSwaps.push({ parent: dom, before: nodes[0] ?? domKids[d] ?? null, remove: nodes, insert: run });
           continue;
         }
         const node = domKids[d++];
@@ -190,17 +204,13 @@ class DomHost implements Host {
     for (const [id, node] of pairs) {
       this.nodes.set(id, node);
       if (node.nodeType === 1) this.wire(id, node as HTMLElement);
-      this.paint(id); // menyamakan style/atribut/value; teks dipotong per bagian
+      this.paint(id); // menyamakan style/atribut/value
     }
-    // Sisa teks dari run disisipkan berurutan setelah node teks pertamanya.
-    let last: Node | null = null;
-    let anchor: Text | null = null;
-    for (const [first, id] of extraText) {
-      if (anchor !== first) [anchor, last] = [first, first];
-      const t = this.nodes.get(id)!;
-      last!.parentNode!.insertBefore(t, last!.nextSibling);
-      last = t;
+    for (const swap of textSwaps) {
+      for (const id of swap.insert) swap.parent.insertBefore(this.nodes.get(id)!, swap.before);
+      for (const n of swap.remove) swap.parent.removeChild(n);
     }
+    for (const n of empties) n.parentNode?.removeChild(n);
     for (const n of [...container.childNodes]) if (n.nodeType === 8) container.removeChild(n);
     return true;
   }
@@ -229,6 +239,7 @@ class DomHost implements Host {
 
   setChildren(id: number, children: number[]) {
     this.children.set(id, children);
+    if (this.detached) return;
     const parent = this.nodes.get(id)!;
     const wanted = children.map((c) => this.nodes.get(c)!);
     wanted.forEach((node, i) => {
@@ -239,7 +250,7 @@ class DomHost implements Host {
 
   remove(id: number) {
     const n = this.nodes.get(id);
-    n?.parentNode?.removeChild(n);
+    if (!this.detached) n?.parentNode?.removeChild(n);
     this.nodes.delete(id);
     this.props.delete(id);
     this.types.delete(id);
@@ -278,5 +289,13 @@ export function mount(
     unmount: () => root.unmount(),
     /** State saat ini, untuk dipakai lagi oleh bundle baru (reload saat development). */
     snapshot: () => root.snapshot(),
+    /**
+     * Lepas komponen (effect & timer dibersihkan) tapi biarkan elemen DOM-nya. Dipakai saat pindah ke
+     * runtime lain: runtime baru me-mount dengan snapshot dan meng-hydrate elemen yang sama.
+     */
+    release: () => {
+      host.detached = true;
+      root.unmount();
+    },
   };
 }
