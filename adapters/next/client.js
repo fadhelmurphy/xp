@@ -57,7 +57,7 @@ export async function sha256(text) {
 
 // --- muat bundle ---
 
-const cache = new Map(); // src → Promise<exports>
+const cache = new Map(); // src (atau "xp-runtime:<sha256>") → Promise<exports>
 
 async function fetchVerified(src, expectedHash) {
   const res = await fetch(src);
@@ -89,6 +89,16 @@ function evaluate(code, require) {
 }
 
 /**
+ * Runtime xp bersama. Di-cache per sha256, bukan per URL: remote lain yang di-build dengan versi xp
+ * yang sama menghasilkan file runtime yang identik, jadi runtime yang sudah dimuat dari remote
+ * pertama langsung dipakai (tidak diunduh lagi). Versi xp berbeda → runtime terpisah.
+ */
+function loadRuntime(runtime) {
+  const key = runtime.sha256 ? `xp-runtime:${runtime.sha256}` : runtime.src;
+  return once(key, async () => evaluate(await fetchVerified(runtime.src, runtime.sha256)));
+}
+
+/**
  * Unduh bundle web, cocokkan dengan sha256 dari manifest, lalu jalankan. Hasilnya di-cache per URL.
  * `runtime` ({ src, sha256 }): runtime xp bersama yang di-require bundle komponen xp. Dimuat sekali
  * untuk semua komponen dari remote yang sama.
@@ -97,7 +107,7 @@ export function loadBundle(src, expectedHash, runtime) {
   return once(src, async () => {
     const [code, modules] = await Promise.all([
       fetchVerified(src, expectedHash),
-      runtime ? once(runtime.src, async () => evaluate(await fetchVerified(runtime.src, runtime.sha256))) : null,
+      runtime ? loadRuntime(runtime) : null,
     ]);
     return evaluate(code, (id) => {
       const mod = modules?.modules?.[id];
