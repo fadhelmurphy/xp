@@ -17,6 +17,8 @@ npx github:fadhelmurphy/xp build src -t web    # langsung, tanpa pertanyaan
 ## Daftar isi
 
 - [CLI](#cli)
+- [xp dev](#xp-dev)
+- [Signing](#signing)
 - [Komponen @xp/runtime](#komponen-xpruntime)
 - [Komponen React, Vue, Svelte](#komponen-react-vue-svelte)
 - [Contoh](#contoh)
@@ -31,8 +33,10 @@ npx github:fadhelmurphy/xp build src -t web    # langsung, tanpa pertanyaan
 
 ```
 xp build [folder] [opsi]      build komponen (default: src)
+xp dev [folder] [opsi]        build, sajikan, dan build ulang setiap file berubah
 xp list [folder]              tampilkan komponen dan jenisnya
 xp serve [dist] [--port n]    sajikan hasil build, dengan CORS dan cache header
+xp keygen [folder]            buat kunci untuk menandatangani manifest
 ```
 
 Opsi `build`:
@@ -43,6 +47,7 @@ Opsi `build`:
     --out <dir>    folder hasil (default: dist)
     --clean        hapus isi folder hasil dulu
 -y, --yes          jangan tanya apa-apa
+    --sign <file>  tandatangani manifest dengan kunci dari xp keygen
 ```
 
 Kalau dijalankan di terminal tanpa `--target` atau `--only`, xp akan bertanya dulu:
@@ -86,6 +91,7 @@ Isi `dist/` setelah build:
 
 ```
 manifest.json              daftar komponen, file terbaru, dan hash-nya
+manifest.sig               tanda tangan manifest (kalau build dengan --sign)
 <nama>.<hash>.d.ts         tipe props, dipakai adapter untuk autocomplete
 <nama>.web.<hash>.js       bundle browser
 <nama>.ssr.<hash>.js       bundle server (React/Vue/Svelte saja)
@@ -96,7 +102,7 @@ Ukuran contoh yang ada di repo:
 
 | Komponen | web | ssr | native |
 |---|---|---|---|
-| `promo-modal` (xp) | 11 kB | sama dengan web | 7 kB |
+| `promo-modal` (xp) | 14 kB | sama dengan web | 8 kB |
 | `like-button` (React) | 220 kB | 219 kB | - |
 | `rating-stars` (Vue) | 70 kB | 82 kB | - |
 | `faq-list` (Svelte) | 64 kB | 30 kB | - |
@@ -109,9 +115,47 @@ Setiap bundle React/Vue/Svelte membawa runtime framework sendiri. Untuk satu dua
 npm install
 npx github:fadhelmurphy/xp build examples -y   # build contoh ke dist/
 npx github:fadhelmurphy/xp serve               # remote di :4400
-npm test                                        # 28 test
+npm test                                        # 36 test
 npm run e2e                                     # tes app Next.js/Nuxt di Chromium (APP_URL=http://localhost:3300)
+npm run e2e:dev                                 # tes xp dev di Chromium
 ```
+
+## xp dev
+
+```bash
+npx github:fadhelmurphy/xp dev
+```
+
+`xp dev` membuat build, menyajikannya di port 4400, lalu build ulang setiap ada file di `src/` yang berubah. Yang di-build ulang hanya komponen yang filenya berubah.
+
+- Buka `http://localhost:4400`, lalu klik nama komponen untuk pratinjau di browser.
+- Di Android dan iOS, pasang `live = true` di `XPView` (lihat bagian [Android](#android) dan [iOS](#ios)). Alamatnya dicetak saat `xp dev` mulai: IP laptop untuk HP di jaringan yang sama, atau `10.0.2.2` untuk emulator Android.
+
+Setiap build baru langsung dimuat tanpa restart app. Nilai `useState` di komponen dibawa ke versi baru, jadi kalau kamu sedang di slide ketiga atau modal sedang terbuka, posisinya tetap. State tidak dibawa kalau urutan atau jenis state di posisi itu berubah. Komponen React, Vue, dan Svelte dimuat ulang dari awal.
+
+Untuk konsumen web (Next.js, Nuxt), manifest dicek ulang setiap `revalidate` detik, jadi cukup refresh halaman.
+
+## Signing
+
+Manifest bisa ditandatangani supaya app hanya menjalankan komponen dari kamu, meskipun CDN-nya dibobol. Manifest berisi `sha256` setiap bundle, jadi cukup manifest yang ditandatangani.
+
+```bash
+npx github:fadhelmurphy/xp keygen                                # xp-signing-key.pem (rahasia) dan xp-public-key.txt
+npx github:fadhelmurphy/xp build --sign xp-signing-key.pem       # menulis dist/manifest.sig
+```
+
+Di CI, isi kunci privat bisa ditaruh di env `XP_SIGNING_KEY` sebagai ganti `--sign`. Jangan commit `xp-signing-key.pem`.
+
+Lalu pasang isi `xp-public-key.txt` di konsumen:
+
+```js
+withXP({}, { remotes: { ui: "https://cdn.kamu/xp" }, publicKey: "MFkwEwYH..." })   // Next.js
+xp: { remotes: { ... }, publicKey: "MFkwEwYH..." }                              // Nuxt
+XPView(base = ..., name = ..., publicKey = "MFkwEwYH...")                      // Android
+XPView(base: ..., name: ..., publicKey: "MFkwEwYH...")                         // iOS
+```
+
+Kalau `publicKey` dipasang, manifest tanpa tanda tangan atau dengan tanda tangan yang tidak cocok ditolak. Algoritmanya ECDSA P-256 dengan SHA-256.
 
 ## Komponen @xp/runtime
 
@@ -129,7 +173,7 @@ export default function PromoModal({ title }: { title: string }) {
 }
 ```
 
-Tidak perlu `import React`. Hooks yang tersedia: `useState`, `useEffect`, `useMemo`, `useCallback`, `useRef`.
+Tidak perlu `import React`. Hooks yang tersedia: `useState`, `useEffect`, `useMemo`, `useCallback`, `useRef`. `setTimeout` dan `setInterval` juga jalan di Android dan iOS.
 
 Elemen yang bisa dipakai hanya `View`, `Text`, `Image`, `Pressable`, `ScrollView`, `TextInput`, dan `Modal`. Tag HTML akan ditolak TypeScript. Styling lewat prop `style`.
 
@@ -158,7 +202,17 @@ Animasi masuk untuk elemen yang muncul setelah mount. Biasanya dipakai bersama `
 <View key={slideIndex} entering={{ opacity: 0, translateX: 28, duration: 320 }}>…</View>
 ```
 
-`entering` sengaja tidak jalan di render pertama supaya HTML hasil SSR tidak berkedip saat hydrate. Animasi yang mengikuti gesture belum ada.
+`entering` sengaja tidak jalan di render pertama supaya HTML hasil SSR tidak berkedip saat hydrate.
+
+### Swipe
+
+`View` dan `Pressable` menerima `onSwipe`. Handler dipanggil dengan arah geserannya (`"left"`, `"right"`, `"up"`, atau `"down"`) kalau jari, atau mouse di web, bergeser minimal 40 px. Tap biasa tetap sampai ke `onPress`.
+
+```tsx
+<View onSwipe={(dir) => dir === "left" && next()}>…</View>
+```
+
+Animasi yang mengikuti jari selama digeser belum ada. Elemennya baru bereaksi setelah jari diangkat.
 
 ## Komponen React, Vue, Svelte
 
@@ -210,7 +264,7 @@ Semua ada di [`examples/`](examples).
 | Komponen | Jenis | Keterangan |
 |---|---|---|
 | [`promo-modal`](examples/promo-modal.tsx) | xp | kartu promo dengan modal pendaftaran |
-| [`promo-slider`](examples/promo-slider.tsx) | xp | slider dengan tombol, titik indikator, dan animasi |
+| [`promo-slider`](examples/promo-slider.tsx) | xp | slider dengan tombol, titik indikator, swipe, autoplay, dan animasi |
 | [`like-button`](examples/like-button.tsx) | React | tombol suka |
 | [`rating-stars`](examples/rating-stars.vue) | Vue | rating bintang dengan scoped CSS |
 | [`faq-list`](examples/faq-list.svelte) | Svelte | FAQ dengan `transition:slide` |
@@ -242,10 +296,11 @@ export default function PromoSlider({ slides = DEFAULT_SLIDES }: Props) {
 
 ```tsx
 <PromoSlider />
+<PromoSlider autoplay={4000} />
 <PromoSlider slides={[{ title: "Promo Oktober", subtitle: "Diskon 20%", color: "#CF222E" }]} />
 ```
 
-Swipe belum bisa karena `ScrollView` belum punya mode paging.
+Slide bisa digeser ke kiri atau kanan (`onSwipe`). `autoplay` memakai `setTimeout`, dan hitungannya diulang setiap slide berganti.
 
 ## Next.js
 
@@ -271,13 +326,13 @@ export default function Page() {
 }
 ```
 
-Komponen dirender di server lalu di-hydrate di browser. Pakai di Server Component, dan props tidak bisa berisi function.
+Komponen dirender di server lalu di-hydrate di browser. Saat hydrate, elemen HTML dari server dipakai apa adanya, tidak dibuat ulang. Pakai di Server Component, dan props tidak bisa berisi function.
 
 Beberapa hal yang perlu diketahui:
 
 - `withXP` mengunduh file `.d.ts` ke `xp-env.d.ts`, jadi props yang salah langsung ketahuan oleh TypeScript.
 - Manifest dicek ulang setiap `revalidate` detik. Deploy komponen baru langsung terpakai tanpa rebuild app.
-- Bundle dicocokkan dengan `sha256` di manifest sebelum dijalankan.
+- Bundle dicocokkan dengan `sha256` di manifest sebelum dijalankan. Dengan `publicKey`, manifest juga harus ditandatangani (lihat [Signing](#signing)).
 - Kalau remote mati saat build, dipakai manifest terakhir yang tersimpan di `.xp/`.
 - Remote cukup static hosting atau CDN dengan CORS. `manifest.json` di-cache sebentar, file ber-hash di-cache `immutable` (contohnya di `cli/serve.mjs`).
 
@@ -359,7 +414,17 @@ fun PromoScreen() {
 }
 ```
 
-`XPView` juga menerima `modifier`, `loading` (default `CircularProgressIndicator`), dan `error` untuk tampilan saat gagal memuat.
+`XPView` juga menerima:
+
+- `modifier`
+- `loading`: tampilan saat memuat, default `CircularProgressIndicator`
+- `error`: tampilan saat gagal memuat
+- `publicKey`: hanya terima manifest yang ditandatangani (lihat [Signing](#signing))
+- `live`: untuk development. Kalau `true`, `XPView` tersambung ke `xp dev` dan memuat ulang setiap build baru
+
+```kotlin
+XPView(base = "http://10.0.2.2:4400", name = "promo-slider", live = BuildConfig.DEBUG)
+```
 
 Props berupa `String`, angka, `Boolean`, `null`, `List`, atau `Map`. Kalau props berubah, komponen di-update tanpa remount, jadi state di dalamnya tidak hilang.
 
@@ -388,6 +453,14 @@ struct PromoScreen: View {
 
 Props berupa `String`, angka, `Bool`, `Array`, atau `Dictionary`. Sama seperti Android, perubahan props tidak me-remount komponen.
 
+`XPView` juga menerima `publicKey` (lihat [Signing](#signing)) dan `live` untuk development:
+
+```swift
+#if DEBUG
+XPView(base: URL(string: "http://localhost:4400")!, name: "promo-slider", live: true)
+#endif
+```
+
 Untuk server `http://` saat development, tambahkan `NSAllowsLocalNetworking` di Info.plist. Simulator bisa langsung akses `http://localhost:4400`. Detail lain dan `swift test` ada di [`adapters/ios/README.md`](adapters/ios/README.md).
 
 ## Cara kerja dan protokol
@@ -398,10 +471,15 @@ Runtime (reconciler dan hooks) sama di semua platform. Runtime tidak menggambar 
 
 Kalau mau membuat SDK sendiri, ini kontraknya (`runtime/protocol.ts`, referensi di `sdk-reference/tree.ts`):
 
-1. Unduh `manifest.json`, ambil `components[nama].native.file`, cek `sha256`-nya.
+1. Unduh `manifest.json`, ambil `components[nama].native.file`, cek `sha256`-nya. Kalau ada kunci publik, cek juga `manifest.sig`.
 2. Jalankan bundle tersebut di engine JS, lalu panggil `XP.mount(propsJson)`.
 3. Kalau ada event, panggil `XP.dispatch(handlerKey, argsJson)`. Untuk props baru, `XP.update(propsJson)`. Untuk membongkar, `XP.unmount()`.
 4. Setiap pemanggilan `XP.*` langsung mengembalikan string JSON berisi daftar batch. SDK cukup bisa `evaluate()`.
+5. Setelah setiap pemanggilan, baca `XP.nextTimer()`. Kalau hasilnya 0 atau lebih, tunggu sekian milidetik lalu panggil `XP.tick()`. Ini yang menjalankan `setTimeout` dan `setInterval`, karena engine JS di SDK tidak punya event loop.
+
+Event yang dikirim lewat `XP.dispatch`: `onPress()`, `onChangeText(text)`, `onRequestClose()`, dan `onSwipe(arah)`.
+
+Untuk reload saat development: `XP.snapshot()` di bundle lama, lalu `XP.mount(propsJson, snapshotJson)` di bundle baru.
 
 Opsional, SDK bisa memasang `globalThis.__xp_native = { send(batchJson) }`. Dengan itu batch dikirim lewat `send` dan `XP.*` mengembalikan `"[]"`.
 
@@ -431,14 +509,18 @@ Yang sudah dites:
 
 - Runtime, protokol, host DOM/SSR/native, CLI, dan manifest. Bundle native dijalankan di QuickJS dan hasil tree-nya dicek di unit test.
 - Target web untuk React, Vue, dan Svelte (SSR, hydrate, scoped CSS) di jsdom dan Chromium.
-- Adapter Next.js dan Nuxt, end-to-end di Chromium.
+- Adapter Next.js dan Nuxt, end-to-end di Chromium, termasuk hydrate yang memakai elemen dari server dan swipe dengan mouse.
 - CLI dari proyek terpisah, lewat `npm pack` dan langsung lewat `npx github:fadhelmurphy/xp`, termasuk menu interaktif.
+- `setTimeout`/`setInterval` dan snapshot state di QuickJS dan JavaScriptCore (lewat Bun).
+- `xp dev` di Chromium: file diubah, pratinjau memuat versi baru, state tetap.
+- Signing: tanda tangan dari Node diverifikasi WebCrypto, Next.js (manifest yang diubah ditolak), dan Kotlin lewat kotlinc.
 
 Yang belum:
 
-- SDK Android: bagian tree, style, dan JSON sudah dites dengan kotlinc, tapi bagian Compose belum pernah dikompilasi atau dijalankan di emulator.
-- SDK iOS: bundle native sudah jalan di JavaScriptCore (lewat Bun), tapi kode Swift belum dikompilasi. Jalankan `swift test` di Mac.
+- SDK Android: bagian tree, style, JSON, arah swipe, event `xp dev`, dan verifikasi tanda tangan sudah dites dengan kotlinc. Bagian Compose (termasuk timer, swipe, dan reload `live`) belum pernah dikompilasi atau dijalankan di emulator.
+- SDK iOS: kode Swift belum dikompilasi. Jalankan `swift test` di Mac.
 - Belum ada GIF demo untuk Android dan iOS.
 - Layout di mobile belum memakai Yoga, jadi hasilnya bisa sedikit berbeda dari web.
-- Belum ada swipe/gesture, `setTimeout` di device, dev server dengan HMR ke device, dan signing bundle.
-- Hydration belum mengklaim node hasil SSR. Client merender ulang isi yang sama.
+- Belum ada animasi yang mengikuti jari selama digeser.
+- Konsumen web (Next.js, Nuxt) belum dapat reload otomatis dari `xp dev`; halamannya perlu di-refresh.
+- Manifest dan bundle SSR dicek di server Next.js/Nuxt. Browser memuat bundle web dari alamat yang sudah dicek itu, tapi isi filenya belum dicocokkan ulang dengan hash di browser.

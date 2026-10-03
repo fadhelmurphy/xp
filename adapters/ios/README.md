@@ -12,6 +12,17 @@ XPView(
 )
 ```
 
+Parameter lain:
+
+- `publicKey`: hanya terima manifest yang ditandatangani kunci ini (`xp keygen`, `xp build --sign`).
+- `live`: untuk development. Sambung ke `xp dev` dan muat ulang setiap build baru, state `useState` dibawa.
+
+```swift
+#if DEBUG
+XPView(base: URL(string: "http://localhost:4400")!, name: "promo-slider", live: true)
+#endif
+```
+
 ## Memasang
 
 Di Xcode: *File → Add Package Dependencies… → Add Local…*, lalu pilih folder ini (`adapters/ios`) dan tambahkan library **XPKit** ke target app. Butuh iOS 16+.
@@ -49,6 +60,7 @@ swift test
 ```
 - `XPTreeTests` memutar ulang sesi rekaman dari QuickJS (`promo-modal.session.json`) dan memeriksa bahwa tree iOS sampai di state yang sama.
 - `XPEngineTests` menjalankan **bundle `promo-modal` asli** di JavaScriptCore lewat `XPEngine`: mount, buka modal, hitung total, update props tanpa remount, lalu unmount.
+- Tes lain: arah swipe, event `xp dev`, dan verifikasi tanda tangan manifest dari Node (fixture `signed-manifest.json`).
 
 Fixture diperbarui dari root repo dengan `npm test && npm run sync-fixtures`.
 
@@ -70,4 +82,6 @@ Animasi: `transitionDuration` di style → `.animation(_:value:)` pada nilai yan
 - Layout memakai stack SwiftUI, belum Yoga. Flex dasar sudah didukung (direction, justify, align, gap, flex, padding, margin, ukuran, %), tapi belum `flexWrap` dan `position: absolute`. Lebar persen selain 100% diperlakukan sebagai lebar penuh.
 - `Modal` tampil sebagai sheet iOS, bukan dialog di tengah layar seperti di web/Android. Ini disengaja, karena sheet adalah pola modal standar iOS.
 - Satu JSContext per `XPView`.
-- `useEffect` dengan timer (`setTimeout`) belum didukung di device.
+- Timer: `XPModel` membaca `XP.nextTimer()` setelah setiap perubahan, menunggu dengan `Task.sleep`, lalu memanggil `XP.tick()`.
+- Swipe memakai `DragGesture` yang dipasang simultan, jadi `Button` tetap menerima tap.
+- Kode Swift, termasuk timer, swipe, signing, dan `live`, belum dikompilasi di sini. Jalankan `swift test` di Mac.

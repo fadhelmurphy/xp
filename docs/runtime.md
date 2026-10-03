@@ -32,10 +32,10 @@ Simpan di `src/counter.tsx`, lalu `npx github:fadhelmurphy/xp build`. Tidak perl
 
 | Primitive | Props | Web | Android | iOS |
 |---|---|---|---|---|
-| `View` | `style`, `children` | `div` | `Column` / `Row` | `VStack` / `HStack` |
+| `View` | `style`, `onSwipe`, `children` | `div` | `Column` / `Row` | `VStack` / `HStack` |
 | `Text` | `style`, `numberOfLines`, `children` | `span` | `Text` | `Text` |
 | `Image` | `src`, `alt`, `style` | `img` | `AsyncImage` | `AsyncImage` |
-| `Pressable` | `onPress`, `disabled`, `style`, `children` | `div` + click | `clickable` | `Button` |
+| `Pressable` | `onPress`, `onSwipe`, `disabled`, `style`, `children` | `div` + click | `clickable` | `Button` |
 | `ScrollView` | `horizontal`, `style`, `children` | `div` + overflow | `verticalScroll` / `horizontalScroll` | `ScrollView` |
 | `TextInput` | `value`, `placeholder`, `onChangeText`, `secure`, `style` | `input` | `BasicTextField` | `TextField` / `SecureField` |
 | `Modal` | `visible`, `onRequestClose`, `style`, `children` | overlay | `Dialog` | `.sheet` |
@@ -129,6 +129,36 @@ const [open, setOpen] = useState(false);
 
 Aturannya sama dengan React: panggil hooks di level atas komponen, jangan di dalam `if` atau loop. Komponen async dan `setState` berantai tanpa henti di dalam effect akan error.
 
+## Timer
+
+`setTimeout`, `setInterval`, `clearTimeout`, dan `clearInterval` bisa dipakai di semua platform. Di Android dan iOS, SDK yang menjalankan timernya. Pasang timer di dalam `useEffect` dan bersihkan di cleanup, supaya timer berhenti saat komponen dilepas.
+
+```tsx
+useEffect(() => {
+  const t = setTimeout(() => setIndex((i) => (i + 1) % count), 4000);
+  return () => clearTimeout(t);
+}, [index]);
+```
+
+Interval yang tertinggal (misalnya saat app di background) tidak dikejar; ia lanjut dari waktu sekarang.
+
+## Swipe
+
+`View` dan `Pressable` menerima `onSwipe`. Handler dipanggil dengan arahnya: `"left"`, `"right"`, `"up"`, atau `"down"`, kalau geserannya minimal 40 px (dp di Android, pt di iOS). Sumbu yang geserannya paling jauh yang dipakai. Tap biasa tetap sampai ke `onPress`.
+
+```tsx
+<View
+  onSwipe={(dir) => {
+    if (dir === "left") next();
+    if (dir === "right") prev();
+  }}
+>
+  …
+</View>
+```
+
+Di web, elemen dengan `onSwipe` tetap bisa di-scroll vertikal di HP (`touch-action: pan-y`). Handler dipanggil setelah jari diangkat. Animasi yang mengikuti jari selama digeser belum ada.
+
 ## List dan key
 
 Beri `key` pada elemen hasil `map`, supaya state tiap item tidak tertukar saat urutan berubah.
@@ -191,11 +221,10 @@ Bundle native dijalankan di QuickJS (Android) dan JavaScriptCore (iOS), bukan di
 - `document`, `window`, `localStorage`
 - `fetch`, `XMLHttpRequest`. Data dikirim lewat props dari app.
 - `Intl`. Format angka dan tanggal sebaiknya ditulis sendiri, jangan mengandalkan `toLocaleString`.
-- `setTimeout` dan `setInterval`
 
 `xp build` memberi peringatan kalau bundle native memakai API di atas.
 
 ## Contoh lengkap
 
 - [`examples/promo-modal.tsx`](../examples/promo-modal.tsx): kartu promo, modal, state, tombol nonaktif, hitung total.
-- [`examples/promo-slider.tsx`](../examples/promo-slider.tsx): slider dengan tombol, titik indikator, dan animasi.
+- [`examples/promo-slider.tsx`](../examples/promo-slider.tsx): slider dengan tombol, titik indikator, swipe, autoplay (`setTimeout`), dan animasi.

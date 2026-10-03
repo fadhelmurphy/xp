@@ -10,6 +10,15 @@ XPView(
 )
 ```
 
+Parameter lain:
+
+- `publicKey`: hanya terima manifest yang ditandatangani kunci ini (`xp keygen`, `xp build --sign`).
+- `live`: untuk development. Sambung ke `xp dev` dan muat ulang setiap build baru, state `useState` dibawa.
+
+```kotlin
+XPView(base = "http://10.0.2.2:4400", name = "promo-slider", live = BuildConfig.DEBUG)
+```
+
 ## Menjalankan demo di emulator
 
 **1. Jalankan remote di WSL** (dari root repo `xp`):
@@ -54,13 +63,18 @@ Error lengkap bisa dilihat di **Logcat** dengan filter tag `XP`.
 ```
 Tes ini memutar ulang sesi `promo-modal.session.json`, yaitu rekaman operasi UI dari bundle asli yang dijalankan di QuickJS (`tests/native-queue.test.ts` di repo xp). Tree Android harus sampai di state yang sama: modal terbuka, total Rp450.000, "Kuota penuh" muncul, dan tidak ada node yang bocor.
 
+Tes lain: arah swipe (`XPGestureTest`), event `xp dev` (`XPDevEventsTest`), dan verifikasi tanda tangan manifest dari Node (`XPSignatureTest`, fixture `signed-manifest.json`).
+
 ## Struktur
 
 | File | Isi |
 |---|---|
 | `XPView.kt` | Composable publik dan pemetaan primitive ke Compose |
-| `XPEngine.kt` | QuickJS (zipline), satu thread, `XP.mount/update/dispatch/unmount` |
-| `XPLoader.kt` | `manifest.json` → bundle, verifikasi `sha256`, cek protokol & primitive |
+| `XPEngine.kt` | QuickJS (zipline), satu thread, `XP.mount/update/dispatch/unmount/tick/snapshot` |
+| `XPLoader.kt` | `manifest.json` → bundle, verifikasi `sha256` dan tanda tangan, cek protokol & primitive |
+| `XPSignature.kt` | Verifikasi `manifest.sig` (ECDSA P-256) |
+| `XPGesture.kt` | Arah swipe |
+| `XPLive.kt`, `XPDevEvents.kt` | Sambungan ke `xp dev` untuk `live = true` |
 | `XPTree.kt` | Menerapkan operasi `create/props/children/delete` (Kotlin murni) |
 | `XPStyle.kt` | Parsing style (flex, padding, warna, ukuran) |
 | `XPJson.kt` | JSON tanpa dependency |
@@ -80,4 +94,5 @@ Animasi: `transitionDuration` di style → `animateColorAsState`/`animateFloatAs
 ## Batasan versi ini
 - Layout memakai Column/Row Compose, belum Yoga. Flex dasar sudah didukung (direction, justify, align, gap, flex, padding, margin, ukuran, %), tapi belum `flexWrap` dan `position: absolute`.
 - Satu QuickJS per `XPView`. Untuk banyak komponen di satu layar, nanti perlu berbagi runtime.
-- `useEffect` dengan timer (`setTimeout`) belum didukung di device.
+- Timer: `XPView` membaca `XP.nextTimer()` setelah setiap perubahan, menunggu dengan `delay`, lalu memanggil `XP.tick()`. Timer berhenti saat `XPView` keluar dari komposisi.
+- Swipe dideteksi dengan `detectDragGestures`. Kode Compose ini, termasuk timer dan `live`, belum dikompilasi di sini.
