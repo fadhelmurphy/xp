@@ -106,6 +106,65 @@ APP_URL=http://localhost:3400 npm run e2e    # dari root repo
 
 Adapter framework lain yang berbasis Vite (SvelteKit, Astro, ...) cukup memakai `@xp/vite`: `xp({ remotes, framework })`, dengan `framework.code()` membuat wrapper komponen dan `framework.dts()` membuat deklarasi tipe. Runtime-nya (`@xp/vite/runtime`: `renderRemote`, `loadClient`) tidak bergantung pada framework.
 
+## Konsumen mobile: Android (`adapters/android`)
+
+Komponen yang sama dirender dengan Jetpack Compose. Tidak ada WebView: bundle native dijalankan di QuickJS, dan setiap primitive dipetakan ke komponen Compose (`Modal` → `Dialog`, `Pressable` → `clickable`, `TextInput` → `BasicTextField`).
+
+```kotlin
+// settings.gradle.kts
+include(":xp-android")
+
+// app/build.gradle.kts
+dependencies {
+    implementation(project(":xp-android"))
+}
+```
+```xml
+<!-- AndroidManifest.xml -->
+<uses-permission android:name="android.permission.INTERNET" />
+```
+```kotlin
+import dev.xp.android.XPView
+
+@Composable
+fun PromoScreen() {
+    XPView(
+        base = "https://cdn.kamu/xp",
+        name = "promo-modal",
+        props = mapOf("title" to "Kelas IELTS", "price" to 150000, "seats" to 3),
+    )
+}
+```
+
+Parameter opsional `XPView`:
+- `modifier`: `Modifier` biasa.
+- `loading`: tampilan saat bundle diunduh. Default-nya `CircularProgressIndicator`.
+- `error`: tampilan kalau gagal, misalnya remote mati, versi protokol berbeda, atau primitive belum didukung.
+
+Props harus bisa di-JSON-kan (`String`, angka, `Boolean`, `null`, `List`, `Map`). Kalau props berubah, komponen di-update tanpa remount, sehingga state di dalamnya tetap.
+
+Saat development dengan emulator, remote lokal diakses lewat `http://10.0.2.2:4400`. Demo app lengkap dan langkah menjalankannya ada di [`adapters/android/README.md`](adapters/android/README.md).
+
+## Konsumen mobile: iOS (belum tersedia)
+
+SDK iOS belum dibuat. Rencananya berupa Swift Package `XPKit` dengan API yang sama seperti Android:
+
+```swift
+import XPKit
+
+struct PromoScreen: View {
+    var body: some View {
+        XPView(
+            base: URL(string: "https://cdn.kamu/xp")!,
+            name: "promo-modal",
+            props: ["title": "Kelas IELTS", "price": 150000, "seats": 3]
+        )
+    }
+}
+```
+
+Implementasinya memakai QuickJS dan SwiftUI dengan protokol yang sama (lihat bagian Protokol di bawah). Bundle `*.native.*.js` yang sekarang sudah bisa dipakai apa adanya.
+
 ## Cara kerja
 
 ```
