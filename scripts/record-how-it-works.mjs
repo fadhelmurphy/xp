@@ -1,6 +1,6 @@
 // Merender scripts/how-it-works.html frame per frame lalu menyimpannya sebagai GIF.
 //
-//   node scripts/record-how-it-works.mjs            → docs/xp-flow.gif
+//   node scripts/record-how-it-works.mjs            → docs/flow.gif
 //
 // Butuh: Chromium dan ffmpeg (sama dengan scripts/record-demo.mjs).
 import { execFileSync } from "node:child_process";
@@ -10,7 +10,7 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { chromium } from "playwright-core";
 
-const OUT = process.env.OUT ?? "docs/xp-flow.gif";
+const OUT = process.env.OUT ?? "docs/flow.gif";
 const FPS = Number(process.env.FPS ?? 15);
 const dir = mkdtempSync(path.join(tmpdir(), "xp-how-"));
 const browser = await chromium.launch({ executablePath: process.env.CHROME ?? "/opt/pw-browsers/chromium" });

@@ -90,7 +90,7 @@
   <div class="abs label" style="left:754px;top:535px;width:116px;color:var(--blue)">iOS</div>
   <div class="abs chip" id="chipAnd" style="left:643px;top:553px;width:110px">QuickJS → Compose</div>
   <div class="abs chip" id="chipIos" style="left:757px;top:553px;width:110px">JSC → SwiftUI</div>
-  <div class="abs" id="tap" style="width:22px;height:22px;border-radius:50%;border:2px solid var(--teal);background:rgba(110,231,200,.3);opacity:0"></div>
+  <div class="abs" id="tap" style="width:22px;height:22px;border-radius:50%;border:2px solid #ffffff;background:rgba(11,17,22,.45);box-shadow:0 0 0 3px rgba(122,162,255,.6);opacity:0"></div>
 
   <!-- 4. operasi UI -->
   <div class="abs" style="left:40px;top:430px;width:560px">
@@ -131,10 +131,10 @@ const OPS = [
   [9.8, '<span class="k">create</span>   9 Modal'],
   [10.2, '<span class="k">props</span>    9 { visible: false }'],
   [10.6, '<span class="k">children</span> 0 [1]'],
-  [14.9, '<span class="up">↑ XP.dispatch("2:onPress")</span>'],
-  [15.7, '<span class="k">props</span>    9 { visible: true }'],
-  [16.5, '<span class="up">↑ XP.dispatch("2:onPress")</span>'],
-  [16.8, '<span class="k">props</span>    9 { visible: true }'],
+  [16.4, '<span class="up">↑ XP.dispatch("2:onPress")</span>'],
+  [16.9, '<span class="k">props</span>    9 { visible: true }'],
+  [18.3, '<span class="up">↑ XP.dispatch("2:onPress")</span>'],
+  [18.6, '<span class="k">props</span>    9 { visible: true }'],
 ];
 const STEPS = [
   [0, "1/6 · TULIS KOMPONEN", "kamu menulis komponen sekali, pakai JSX biasa."],
@@ -142,9 +142,9 @@ const STEPS = [
   [5.2, "3/6 · MUAT LEWAT URL", "browser memuat web.js (SSR). Android & iOS memuat native.js."],
   [8.2, "4/6 · JALANKAN", "native.js jalan di QuickJS / JavaScriptCore, keluar operasi UI."],
   [11.4, "5/6 · RENDER NATIVE", "SDK menggambar komponen asli Compose & SwiftUI."],
-  [14.0, "6/6 · EVENT", "tap → XP.dispatch → operasi baru → modal native."],
+  [14.0, "6/6 · EVENT", "klik di browser langsung ke DOM. tap di mobile lewat XP.dispatch."],
 ];
-const DURATION = 19;
+const DURATION = 21.5;
 
 // Partikel yang berjalan di sepanjang kabel: [kabel, mulai, durasi]
 const PARTICLES = [["w0", 3.0, 1.0], ["w1", 5.6, 1.1], ["w2", 5.9, 1.1], ["w3", 6.2, 1.1]];
@@ -158,7 +158,7 @@ for (const [w] of PARTICLES) {
 function ui(kind, t) {
   // Isi layar: kartu promo; modal muncul setelah tap.
   const show = kind === "web" ? ease(seg(t, 6.6, 7.2)) : ease(seg(t, 11.6, 12.4));
-  const modalT = kind === "and" ? ease(seg(t, 15.7, 16.2)) : kind === "ios" ? ease(seg(t, 16.8, 17.3)) : 0;
+  const modalT = ease(kind === "web" ? seg(t, 14.9, 15.4) : kind === "and" ? seg(t, 16.9, 17.4) : seg(t, 18.6, 19.1));
   const small = kind === "web";
   const pad = small ? 8 : 6;
   return `
@@ -171,8 +171,8 @@ function ui(kind, t) {
       ${small ? "" : '<div style="height:5px;width:70%;background:#2b3a48;border-radius:2px"></div><div style="height:5px;width:50%;background:#2b3a48;border-radius:2px"></div>'}
     </div>
     <div style="position:absolute;inset:0;background:rgba(0,0,0,${0.55 * modalT})"></div>
-    <div style="position:absolute;left:${kind === "ios" ? 0 : 8}px;right:${kind === "ios" ? 0 : 8}px;${kind === "ios" ? "bottom:0" : "top:30%"};
-      height:${kind === "ios" ? 62 : 52}%;background:#f6f8fa;border-radius:${kind === "ios" ? "8px 8px 0 0" : "6px"};
+    <div style="position:absolute;left:${kind === "ios" ? 0 : kind === "web" ? 50 : 8}px;right:${kind === "ios" ? 0 : kind === "web" ? 50 : 8}px;${kind === "ios" ? "bottom:0" : kind === "web" ? "top:10%" : "top:30%"};
+      height:${kind === "ios" ? 62 : kind === "web" ? 80 : 52}%;background:#f6f8fa;border-radius:${kind === "ios" ? "8px 8px 0 0" : "6px"};
       opacity:${modalT};transform:${kind === "ios" ? `translateY(${(1 - modalT) * 100}%)` : `scale(${0.85 + 0.15 * modalT})`};padding:7px">
       <div style="height:6px;width:70%;background:#1F2328;border-radius:3px;margin-bottom:6px"></div>
       <div style="display:flex;gap:4px;align-items:center;margin-bottom:6px">
@@ -248,7 +248,7 @@ function render(t) {
     const p = seg(t, a, a + 0.6);
     return p > 0 && p < 1 ? { x, y, o: Math.sin(p * Math.PI), s: 1 - 0.3 * Math.sin(p * Math.PI) } : null;
   };
-  const tp = tapAt(687, 452, 14.3) || tapAt(801, 452, 16.3);
+  const tp = tapAt(739, 283, 14.3) || tapAt(687, 452, 15.9) || tapAt(801, 452, 17.8);
   if (tp) { tap.style.left = tp.x + "px"; tap.style.top = tp.y + "px"; tap.style.opacity = tp.o; tap.style.transform = `scale(${tp.s})`; }
   else tap.style.opacity = 0;
 }
