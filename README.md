@@ -1,73 +1,103 @@
-# xp: komponen JSX → web + iOS + Android, di-load lewat URL
+# xp
 
-Tulis komponen sekali, build dengan satu perintah, lalu muat lewat URL dari app mana pun.
+Tulis komponen sekali, build, lalu muat lewat URL dari web, Android, atau iOS. Di mobile komponennya dirender native (Compose / SwiftUI), bukan WebView.
 
-- **Crossplatform:** komponen `@xp/runtime` (JSX + hooks) → bundle web + bundle native untuk iOS/Android. **Tanpa WebView.**
-- **Web:** komponen **React, Vue, atau Svelte** biasa → bundle web. Runtime framework ikut di dalam bundle, jadi app pemakai tidak perlu memasang framework itu. App Next.js bisa memakai komponen Vue, dan app Nuxt bisa memakai komponen React.
+Ada dua jenis komponen:
+
+- Komponen `@xp/runtime` (JSX + hooks). Hasil build-nya bisa dipakai di web dan di iOS/Android.
+- Komponen React, Vue, atau Svelte biasa. Hanya untuk web. Runtime framework-nya ikut di bundle, jadi app pemakai tidak perlu memasang framework tersebut. Komponen Vue bisa dipakai di Next.js, komponen React bisa dipakai di Nuxt.
 
 ```bash
-npx github:fadhelmurphy/xp build             # pilih komponen & target secara interaktif
-npx github:fadhelmurphy/xp build src -t web   # tanpa pertanyaan
+npx github:fadhelmurphy/xp build              # interaktif: pilih komponen dan target
+npx github:fadhelmurphy/xp build src -t web    # langsung, tanpa pertanyaan
 ```
 
-![Demo build: xp mendeteksi jenis tiap komponen, lalu membuat bundle web, ssr, dan native sesuai targetnya](docs/demo-build.gif)
+![xp build](docs/demo-build.gif)
+
+## Daftar isi
+
+- [CLI](#cli)
+- [Komponen @xp/runtime](#komponen-xpruntime)
+- [Komponen React, Vue, Svelte](#komponen-react-vue-svelte)
+- [Contoh](#contoh)
+- [Next.js](#nextjs)
+- [Nuxt](#nuxt)
+- [Android](#android)
+- [iOS](#ios)
+- [Cara kerja dan protokol](#cara-kerja-dan-protokol)
+- [Status](#status)
 
 ## CLI
 
 ```
-xp build [folder] [opsi]      build komponen (default folder: src)
-xp list [folder]              daftar komponen beserta jenis dan target yang bisa dipakai
-xp serve [dist] [--port n]    sajikan hasil build (CORS + cache header)
+xp build [folder] [opsi]      build komponen (default: src)
+xp list [folder]              tampilkan komponen dan jenisnya
+xp serve [dist] [--port n]    sajikan hasil build, dengan CORS dan cache header
 ```
 
-| Opsi build | |
-|---|---|
-| `-t, --target <t>` | `auto` (default): `@xp/runtime` → web + iOS/Android, React/Vue/Svelte → web<br>`web`: semua komponen, web saja<br>`crossplatform`: hanya komponen `@xp/runtime`, web + iOS/Android |
-| `-o, --only a,b` | hanya komponen tertentu (nama file tanpa ekstensi) |
-| `--out <folder>` | folder hasil (default `dist`) |
-| `--clean` | kosongkan folder hasil dulu. Tanpa ini, hanya komponen yang di-build yang diganti; komponen lain tetap di manifest |
-| `-y, --yes` | jangan bertanya |
+Opsi `build`:
 
-Di terminal interaktif tanpa `--target`/`--only`, xp menanyakan komponen mana yang di-build (checkbox) dan targetnya. Jenis komponen dideteksi otomatis:
+```
+-t, --target <t>   auto | web | crossplatform   (default: auto)
+-o, --only a,b     hanya komponen tertentu (nama file tanpa ekstensi)
+    --out <dir>    folder hasil (default: dist)
+    --clean        hapus isi folder hasil dulu
+-y, --yes          jangan tanya apa-apa
+```
 
-| File | Jenis | Target yang bisa |
+Kalau dijalankan di terminal tanpa `--target` atau `--only`, xp akan menanyakan komponen mana yang mau di-build dan targetnya.
+
+Arti target:
+
+- `auto`: komponen `@xp/runtime` dibuat untuk web + mobile, komponen React/Vue/Svelte untuk web.
+- `web`: semua komponen, web saja.
+- `crossplatform`: hanya komponen `@xp/runtime`. Komponen framework dilewati, atau error kalau dipilih secara eksplisit.
+
+Tanpa `--clean`, hanya komponen yang di-build yang diganti. Komponen lain di manifest tetap ada.
+
+Jenis komponen ditebak dari file:
+
+| File | Jenis | Bisa untuk |
 |---|---|---|
-| `.tsx`/`.jsx` yang import `@xp/runtime` | xp | web + iOS/Android |
-| `.tsx`/`.jsx` yang import `react` | React | web |
+| `.tsx` / `.jsx` yang import `@xp/runtime` | xp | web, Android, iOS |
+| `.tsx` / `.jsx` yang import `react` | React | web |
 | `.vue` | Vue | web |
 | `.svelte` | Svelte | web |
 
-React, Vue, dan Svelte diambil dari `node_modules` proyek komponen (`npm i react react-dom`, `npm i vue`, atau `npm i svelte`). Komponen React/Vue/Svelte yang dipilih dengan target `crossplatform` ditolak dengan pesan yang jelas, karena iOS/Android butuh komponen `@xp/runtime`.
+React, Vue, dan Svelte diambil dari `node_modules` proyekmu, jadi pasang dulu yang dibutuhkan (`npm i react react-dom`, `npm i vue`, `npm i svelte`).
 
-Hasil build:
+Isi `dist/` setelah build:
+
 ```
-dist/
-  manifest.json                      → nama → jenis, target, file terbaru, hash
-  <nama>.<hash>.d.ts                 → tipe props (autocomplete di app konsumen)
-  <nama>.web.<hash>.js               → dimuat browser (render/hydrate)
-  <nama>.ssr.<hash>.js               → dimuat server untuk SSR (hanya React/Vue/Svelte)
-  <nama>.native.<hash>.js            → QuickJS (Android) / JavaScriptCore (iOS), hanya komponen xp
+manifest.json              daftar komponen, file terbaru, dan hash-nya
+<nama>.<hash>.d.ts         tipe props, dipakai adapter untuk autocomplete
+<nama>.web.<hash>.js       bundle browser
+<nama>.ssr.<hash>.js       bundle server (React/Vue/Svelte saja)
+<nama>.native.<hash>.js    bundle untuk QuickJS / JavaScriptCore (komponen xp saja)
 ```
 
-| Contoh | web | ssr | native |
+Ukuran contoh yang ada di repo:
+
+| Komponen | web | ssr | native |
 |---|---|---|---|
-| `promo-modal` (xp) | 11 kB | (sama dengan web) | 7 kB |
-| `like-button` (React) | 220 kB | 219 kB | – |
-| `rating-stars` (Vue) | 70 kB | 82 kB | – |
-| `faq-list` (Svelte) | 64 kB | 30 kB | – |
+| `promo-modal` (xp) | 11 kB | sama dengan web | 7 kB |
+| `like-button` (React) | 220 kB | 219 kB | - |
+| `rating-stars` (Vue) | 70 kB | 82 kB | - |
+| `faq-list` (Svelte) | 64 kB | 30 kB | - |
 
-Setiap bundle React/Vue/Svelte membawa runtime framework-nya sendiri. Untuk satu-dua komponen di sebuah halaman, ini praktis. Untuk banyak komponen dari framework yang sama di satu halaman, ukurannya ikut berlipat; di situ komponen xp (11 kB) jauh lebih ringan.
+Setiap bundle React/Vue/Svelte membawa runtime framework sendiri. Untuk satu dua komponen tidak masalah, tapi kalau satu halaman memuat banyak komponen React, ukurannya ikut berlipat.
 
-Untuk pengembangan repo ini:
+### Development repo ini
+
 ```bash
 npm install
 npm run build     # xp build examples --out dist
-npm test          # 27 test: QuickJS, SSR, DOM, React/Vue/Svelte, CLI, reconciler
+npm test          # 27 test
 npm run serve     # remote di :4400
-npm run e2e       # app konsumen (Next.js/Nuxt) di Chromium, APP_URL=http://localhost:3300
+npm run e2e       # tes app Next.js/Nuxt di Chromium (APP_URL=http://localhost:3300)
 ```
 
-## Menulis komponen crossplatform (`@xp/runtime`)
+## Komponen @xp/runtime
 
 ```tsx
 import { Modal, Pressable, Text, View, useState } from "@xp/runtime";
@@ -83,30 +113,38 @@ export default function PromoModal({ title }: { title: string }) {
 }
 ```
 
-- Tidak perlu `import React`: JSX runtime-nya milik xp.
-- Hooks tersedia: `useState`, `useEffect`, `useMemo`, `useCallback`, `useRef`.
-- Hanya boleh memakai primitive: `View`, `Text`, `Image`, `Pressable`, `ScrollView`, `TextInput`, `Modal`. Tag HTML ditolak oleh TypeScript.
-- Di device tidak ada `document`, `window`, `fetch`, maupun `Intl`. Build memberi peringatan kalau bundle native memakainya.
+Tidak perlu `import React`. Hooks yang tersedia: `useState`, `useEffect`, `useMemo`, `useCallback`, `useRef`.
+
+Elemen yang bisa dipakai hanya `View`, `Text`, `Image`, `Pressable`, `ScrollView`, `TextInput`, dan `Modal`. Tag HTML akan ditolak TypeScript. Styling lewat prop `style`.
+
+Di device tidak ada `document`, `window`, `fetch`, atau `Intl`. Kalau bundle native memakainya, build akan memberi peringatan.
 
 ### Animasi
 
-Animasi ditulis secara deklaratif. JS hanya menentukan nilai akhir, lalu tiap platform menjalankan animasinya sendiri (CSS transition di web, `animate*AsState` di Android, `.animation` di iOS), jadi tetap mulus di device.
+Komponen cukup menentukan nilai akhirnya, animasinya dijalankan oleh platform masing-masing (CSS transition di web, `animate*AsState` di Android, `.animation` di iOS).
+
+Transisi saat style berubah. Yang bisa dianimasikan: `backgroundColor`, `opacity`, `width`, `height`, `borderColor`, `color`.
 
 ```tsx
-// 1. Transisi perubahan style: backgroundColor, opacity, width, height, borderColor, color
-<View style={{ backgroundColor: active ? "#1F6FEB" : "#D0D7DE", width: active ? 18 : 8,
-               transitionDuration: 250, transitionTimingFunction: "ease-in-out" }} />
+<View style={{
+  backgroundColor: active ? "#1F6FEB" : "#D0D7DE",
+  width: active ? 18 : 8,
+  transitionDuration: 250,
+  transitionTimingFunction: "ease-in-out",
+}} />
+```
 
-// 2. Animasi masuk: elemen yang muncul setelah mount bergerak dari nilai ini ke posisi normal.
-//    Pakai bersama `key` yang berganti untuk konten yang diganti (mis. slide baru).
+Animasi masuk untuk elemen yang muncul setelah mount. Biasanya dipakai bersama `key` yang berganti:
+
+```tsx
 <View key={slideIndex} entering={{ opacity: 0, translateX: 28, duration: 320 }}>…</View>
 ```
 
-`entering` tidak dijalankan saat render pertama, supaya konten hasil SSR tidak berkedip saat hydrate. Animasi yang mengikuti jari (gesture) belum didukung.
+`entering` sengaja tidak jalan di render pertama supaya HTML hasil SSR tidak berkedip saat hydrate. Animasi yang mengikuti gesture belum ada.
 
-## Menulis komponen web (React, Vue, Svelte)
+## Komponen React, Vue, Svelte
 
-Tulis seperti biasa di framework masing-masing, termasuk hooks, `<script setup>`, runes, scoped CSS, dan transisi Svelte. Satu file = satu komponen, dengan default export (React) atau satu SFC (Vue/Svelte).
+Tulis seperti biasa. Satu file satu komponen: default export untuk React, SFC untuk Vue dan Svelte. Hooks, `<script setup>`, runes, scoped CSS, dan transisi Svelte semuanya jalan.
 
 ```tsx
 // src/like-button.tsx
@@ -117,55 +155,59 @@ export default function LikeButton({ initial = 12 }: { initial?: number }) {
   return <button onClick={() => setLiked(!liked)}>{liked ? "♥" : "♡"} {initial + (liked ? 1 : 0)}</button>;
 }
 ```
+
 ```vue
 <!-- src/rating-stars.vue -->
 <script setup lang="ts">
 import { ref } from "vue";
 const value = ref(0);
 </script>
+
 <template>
   <button v-for="i in 5" :key="i" :class="{ on: i <= value }" @click="value = i">★</button>
 </template>
+
 <style scoped>.on { color: #bf8700; }</style>
 ```
+
 ```svelte
 <!-- src/faq-list.svelte -->
 <script>
   import { slide } from "svelte/transition";
   let open = $state(false);
 </script>
+
 <button onclick={() => (open = !open)}>Pertanyaan</button>
 {#if open}<p transition:slide>Jawaban</p>{/if}
 ```
 
-![Demo: komponen React, Vue, dan Svelte dipakai di app Next.js yang sama](docs/demo-frameworks.gif)
+![React, Vue, dan Svelte di satu app Next.js](docs/demo-frameworks.gif)
 
-Di app konsumen semuanya dipakai dengan cara yang sama: `import LikeButton from "xp:ui/like-button"`. Server merender HTML dengan bundle `ssr`, lalu browser meng-hydrate DOM yang sama dengan bundle `web`. CSS (scoped CSS Vue, CSS Svelte) ikut di HTML SSR dan dipindah ke `<head>` saat hydrate. Props harus bisa di-JSON-kan.
+Di app konsumen cara pakainya sama dengan komponen lain: `import LikeButton from "xp:ui/like-button"`. Server merender HTML pakai bundle `ssr`, lalu browser meng-hydrate pakai bundle `web`. CSS ikut di HTML dan dipindah ke `<head>` saat hydrate. Props harus bisa di-serialize ke JSON.
 
-Komponen ini hanya untuk web. Untuk iOS/Android, tulis dengan `@xp/runtime`.
+## Contoh
 
-## Contoh komponen
+Semua ada di [`examples/`](examples).
 
-Ada di folder [`examples/`](examples). `promo-modal` dan `promo-slider` hanya memakai primitive dan `style`, jadi jalan sama di web, Android, dan iOS. Tiga lainnya komponen web dari React, Vue, dan Svelte.
+| Komponen | Jenis | Keterangan |
+|---|---|---|
+| [`promo-modal`](examples/promo-modal.tsx) | xp | kartu promo dengan modal pendaftaran |
+| [`promo-slider`](examples/promo-slider.tsx) | xp | slider dengan tombol, titik indikator, dan animasi |
+| [`like-button`](examples/like-button.tsx) | React | tombol suka |
+| [`rating-stars`](examples/rating-stars.vue) | Vue | rating bintang dengan scoped CSS |
+| [`faq-list`](examples/faq-list.svelte) | Svelte | FAQ dengan `transition:slide` |
 
-| Komponen | Isi |
-|---|---|
-| [`promo-modal`](examples/promo-modal.tsx) | Kartu promo + modal pendaftaran: state, kondisional, tombol nonaktif, hitung total |
-| [`like-button`](examples/like-button.tsx) | React (web): tombol suka dengan `useState` |
-| [`rating-stars`](examples/rating-stars.vue) | Vue (web): rating bintang, `<script setup>`, scoped CSS |
-| [`faq-list`](examples/faq-list.svelte) | Svelte (web): FAQ dengan runes dan `transition:slide` |
-| [`promo-slider`](examples/promo-slider.tsx) | Slider promo: tombol ‹ ›, titik indikator yang bisa diklik, berputar di ujung, slide bisa diganti lewat props. Beranimasi: warna latar dan titik aktif bertransisi, konten slide baru masuk dari arah navigasi |
-
-![Demo promo-slider di app Next.js](docs/demo-slider.gif)
+![promo-slider](docs/demo-slider.gif)
 
 ```tsx
 import { Pressable, Text, View, useState } from "@xp/runtime";
 
 export default function PromoSlider({ slides = DEFAULT_SLIDES }: Props) {
   const [index, setIndex] = useState(0);
-  const [direction, setDirection] = useState(1); // 1 = maju, -1 = mundur
+  const [direction, setDirection] = useState(1);
   const active = Math.min(index, slides.length - 1);
   const current = slides[active];
+
   return (
     <View style={{ gap: 12 }}>
       <View style={{ height: 160, padding: 20, borderRadius: 16, justifyContent: "flex-end",
@@ -174,34 +216,36 @@ export default function PromoSlider({ slides = DEFAULT_SLIDES }: Props) {
           <Text style={{ color: "#FFFFFF", fontSize: 22, fontWeight: "700" }}>{current.title}</Text>
         </View>
       </View>
-      {/* tombol ‹ ›, titik indikator, penghitung: lihat examples/promo-slider.tsx */}
+      {/* tombol dan titik indikator: lihat examples/promo-slider.tsx */}
     </View>
   );
 }
 ```
 
-Dipakai seperti komponen lain, dengan slide bawaan atau slide dari app:
 ```tsx
 <PromoSlider />
 <PromoSlider slides={[{ title: "Promo Oktober", subtitle: "Diskon 20%", color: "#CF222E" }]} />
 ```
 
-Slider ini berpindah lewat tombol dan titik. Geser dengan jari (swipe) belum didukung, karena butuh mode paging di `ScrollView` yang belum ada di runtime.
+Swipe belum bisa karena `ScrollView` belum punya mode paging.
 
-## Konsumen web: Next.js (`@xp/next`)
+## Next.js
 
-![Demo Next.js: komponen promo-modal dimuat dari URL, SSR, lalu modal dan perhitungan total jalan di browser](docs/demo-next.gif)
+![Next.js](docs/demo-next.gif)
 
 ```bash
 npm i @xp/next
 ```
+
 ```js
 // next.config.mjs
 import { withXP } from "@xp/next";
+
 export default withXP({}, { remotes: { ui: "https://cdn.kamu/xp" }, revalidate: 30 });
 ```
+
 ```tsx
-// app/page.tsx: import seperti modul biasa
+// app/page.tsx
 import PromoModal from "xp:ui/promo-modal";
 
 export default function Page() {
@@ -209,30 +253,34 @@ export default function Page() {
 }
 ```
 
-- **SSR:** HTML dirender di server, lalu bundle yang sama di-hydrate di browser (state dan event jalan).
-- **Bertipe:** `withXP` mengunduh `.d.ts` ke `xp-env.d.ts`, jadi props yang salah langsung jadi error TypeScript.
-- **Tanpa rebuild:** manifest dicek ulang tiap `revalidate` detik, sehingga deploy remote langsung terpakai.
-- **Aman:** bundle diverifikasi dengan `sha256` dari manifest sebelum dijalankan.
-- Pakai di **Server Component**. Props harus serializable (tidak bisa mengoper function).
-- Remote mati saat build: dipakai manifest terakhir dari `.xp/`.
-- Host remote cukup static hosting/CDN dengan CORS: `manifest.json` di-cache singkat, file ber-hash `immutable` (lihat `cli/serve.mjs`).
+Komponen dirender di server lalu di-hydrate di browser. Pakai di Server Component, dan props tidak bisa berisi function.
 
-Contoh lengkap ada di `examples-consumer/next-app`. Untuk menjalankannya secara lokal:
+Beberapa hal yang perlu diketahui:
+
+- `withXP` mengunduh file `.d.ts` ke `xp-env.d.ts`, jadi props yang salah langsung ketahuan oleh TypeScript.
+- Manifest dicek ulang setiap `revalidate` detik. Deploy komponen baru langsung terpakai tanpa rebuild app.
+- Bundle dicocokkan dengan `sha256` di manifest sebelum dijalankan.
+- Kalau remote mati saat build, dipakai manifest terakhir yang tersimpan di `.xp/`.
+- Remote cukup static hosting atau CDN dengan CORS. `manifest.json` di-cache sebentar, file ber-hash di-cache `immutable` (contohnya di `cli/serve.mjs`).
+
+Menjalankan contoh di `examples-consumer/next-app`:
+
 ```bash
-npm run build && npm run serve                        # terminal 1: remote di :4400
-cd adapters/next && npm pack                          # paket adapter (.tgz)
+npm run build && npm run serve                     # terminal 1
+cd adapters/next && npm pack
 cd ../../examples-consumer/next-app && npm install
-npx next build && npx next start -p 3300              # terminal 2
-APP_URL=http://localhost:3300 npm run e2e             # terminal 3, dari root repo
+npx next build && npx next start -p 3300           # terminal 2
+APP_URL=http://localhost:3300 npm run e2e          # terminal 3, dari root repo
 ```
 
-## Konsumen web: Nuxt (`@xp/nuxt`)
+## Nuxt
 
-![Demo Nuxt: komponen yang sama dimuat dari URL di app Nuxt](docs/demo-nuxt.gif)
+![Nuxt](docs/demo-nuxt.gif)
 
 ```bash
 npm i @xp/vite @xp/nuxt
 ```
+
 ```ts
 // nuxt.config.ts
 export default defineNuxtConfig({
@@ -240,6 +288,7 @@ export default defineNuxtConfig({
   xp: { remotes: { ui: "https://cdn.kamu/xp" }, revalidate: 30 },
 });
 ```
+
 ```vue
 <script setup lang="ts">
 import PromoModal from "xp:ui/promo-modal";
@@ -250,18 +299,19 @@ import PromoModal from "xp:ui/promo-modal";
 </template>
 ```
 
-Fiturnya sama dengan Next.js: SSR (lewat `useAsyncData`, sehingga HTML ikut payload dan client tidak merender ulang), hydrate, tipe props otomatis (`nuxi typecheck`), dan update tanpa rebuild. Contohnya ada di `examples-consumer/nuxt-app`:
+Sama seperti di Next.js: SSR, hydrate, tipe props (cek dengan `nuxi typecheck`), dan update tanpa rebuild. SSR-nya lewat `useAsyncData`, jadi HTML ikut di payload dan tidak dirender ulang di client.
+
 ```bash
 cd examples-consumer/nuxt-app && npm install && npx nuxt build
 PORT=3400 node .output/server/index.mjs
-APP_URL=http://localhost:3400 npm run e2e    # dari root repo
+APP_URL=http://localhost:3400 npm run e2e          # dari root repo
 ```
 
-Adapter framework lain yang berbasis Vite (SvelteKit, Astro, ...) cukup memakai `@xp/vite`: `xp({ remotes, framework })`, dengan `framework.code()` membuat wrapper komponen dan `framework.dts()` membuat deklarasi tipe. Runtime-nya (`@xp/vite/runtime`: `renderRemote`, `loadClient`) tidak bergantung pada framework.
+Untuk framework lain yang berbasis Vite (SvelteKit, Astro, dll.) bisa langsung pakai `@xp/vite`: `xp({ remotes, framework })`, di mana `framework.code()` membuat wrapper komponen dan `framework.dts()` membuat deklarasi tipenya. `@xp/vite/runtime` (`renderRemote`, `loadClient`) tidak terikat ke framework tertentu.
 
-## Konsumen mobile: Android (`adapters/android`)
+## Android
 
-Komponen yang sama dirender dengan Jetpack Compose. Tidak ada WebView: bundle native dijalankan di QuickJS, dan setiap primitive dipetakan ke komponen Compose (`Modal` → `Dialog`, `Pressable` → `clickable`, `TextInput` → `BasicTextField`).
+Bundle native dijalankan di QuickJS (zipline), lalu hasilnya dirender dengan Jetpack Compose. `Modal` jadi `Dialog`, `Pressable` jadi `clickable`, `TextInput` jadi `BasicTextField`.
 
 ```kotlin
 // settings.gradle.kts
@@ -272,10 +322,12 @@ dependencies {
     implementation(project(":xp-android"))
 }
 ```
+
 ```xml
 <!-- AndroidManifest.xml -->
 <uses-permission android:name="android.permission.INTERNET" />
 ```
+
 ```kotlin
 import dev.xp.android.XPView
 
@@ -289,22 +341,17 @@ fun PromoScreen() {
 }
 ```
 
-Parameter opsional `XPView`:
-- `modifier`: `Modifier` biasa.
-- `loading`: tampilan saat bundle diunduh. Default-nya `CircularProgressIndicator`.
-- `error`: tampilan kalau gagal, misalnya remote mati, versi protokol berbeda, atau primitive belum didukung.
+`XPView` juga menerima `modifier`, `loading` (default `CircularProgressIndicator`), dan `error` untuk tampilan saat gagal memuat.
 
-Props harus bisa di-JSON-kan (`String`, angka, `Boolean`, `null`, `List`, `Map`). Kalau props berubah, komponen di-update tanpa remount, sehingga state di dalamnya tetap.
+Props berupa `String`, angka, `Boolean`, `null`, `List`, atau `Map`. Kalau props berubah, komponen di-update tanpa remount, jadi state di dalamnya tidak hilang.
 
-Saat development dengan emulator, remote lokal diakses lewat `http://10.0.2.2:4400`. Demo app lengkap dan langkah menjalankannya ada di [`adapters/android/README.md`](adapters/android/README.md).
+Dari emulator, server lokal diakses lewat `http://10.0.2.2:4400`. Demo app dan cara menjalankannya ada di [`adapters/android/README.md`](adapters/android/README.md).
 
-GIF demo Android belum ada. Rekam dari emulator dengan `adb shell screenrecord /sdcard/demo.mp4` (atau tombol *Record* di panel emulator), lalu ubah jadi GIF dengan `ffmpeg` dan simpan sebagai `docs/demo-android.gif`.
+## iOS
 
-## Konsumen mobile: iOS (`adapters/ios`)
+Bundle native dijalankan di JavaScriptCore bawaan iOS dan dirender dengan SwiftUI, tanpa dependency tambahan. `Modal` jadi `.sheet`, `Pressable` jadi `Button`, `TextInput` jadi `TextField`.
 
-Komponen yang sama dirender dengan SwiftUI. Logikanya dijalankan di JavaScriptCore bawaan iOS, tanpa WebView dan tanpa dependency pihak ketiga. `Modal` tampil sebagai `.sheet`, `Pressable` sebagai `Button`, dan `TextInput` sebagai `TextField`.
-
-Pasang lewat Xcode: *File → Add Package Dependencies… → Add Local…* → `adapters/ios`, lalu tambahkan library **XPKit** (iOS 16+).
+Tambahkan lewat Xcode: File > Add Package Dependencies > Add Local, pilih `adapters/ios`, lalu tambahkan library `XPKit` (iOS 16+).
 
 ```swift
 import SwiftUI
@@ -321,37 +368,34 @@ struct PromoScreen: View {
 }
 ```
 
-Props harus bisa di-JSON-kan (`String`, angka, `Bool`, `Array`, `Dictionary`). Kalau props berubah, komponen di-update tanpa remount, sehingga state di dalamnya tetap. Untuk development dengan `http://`, tambahkan `NSAllowsLocalNetworking` di Info.plist. Simulator bisa langsung mengakses `http://localhost:4400` di Mac.
+Props berupa `String`, angka, `Bool`, `Array`, atau `Dictionary`. Sama seperti Android, perubahan props tidak me-remount komponen.
 
-Demo, tes (`swift test`), dan detail lainnya ada di [`adapters/ios/README.md`](adapters/ios/README.md).
+Untuk server `http://` saat development, tambahkan `NSAllowsLocalNetworking` di Info.plist. Simulator bisa langsung akses `http://localhost:4400`. Detail lain dan `swift test` ada di [`adapters/ios/README.md`](adapters/ios/README.md).
 
-GIF demo iOS belum ada. Rekam dari Simulator dengan `xcrun simctl io booted recordVideo demo.mp4`, lalu ubah jadi GIF dengan `ffmpeg` dan simpan sebagai `docs/demo-ios.gif`.
-
-## Cara kerja
+## Cara kerja dan protokol
 
 ```
-komponen.tsx ──xp build──┬─ web.js    → DOM host (client) / HTML host (SSR)
-                         └─ native.js → QuickJS di SDK → operasi UI → SwiftUI / Compose
+komponen.tsx --xp build--> web.js     DOM (browser) / HTML (SSR)
+                           native.js  QuickJS / JavaScriptCore -> operasi UI -> Compose / SwiftUI
 ```
 
-Runtime (reconciler + hooks) sama untuk semua target. Ia tidak menggambar apa pun; ia hanya menghasilkan **operasi UI**. Yang menggambar adalah host di masing-masing platform.
+Runtime (reconciler dan hooks) sama di semua platform. Runtime tidak menggambar apa pun, hanya menghasilkan daftar operasi UI. Yang menggambar adalah host di tiap platform.
 
-## Protokol untuk SDK iOS/Android
+Kalau mau membuat SDK sendiri, ini kontraknya (`runtime/protocol.ts`, referensi di `sdk-reference/tree.ts`):
 
-Ini satu-satunya kontrak yang perlu diimplementasikan tim mobile (`runtime/protocol.ts`, acuannya `sdk-reference/tree.ts`).
+1. Unduh `manifest.json`, ambil `components[nama].native.file`, cek `sha256`-nya.
+2. Jalankan bundle tersebut di engine JS, lalu panggil `XP.mount(propsJson)`.
+3. Kalau ada event, panggil `XP.dispatch(handlerKey, argsJson)`. Untuk props baru, `XP.update(propsJson)`. Untuk membongkar, `XP.unmount()`.
+4. Setiap pemanggilan `XP.*` langsung mengembalikan string JSON berisi daftar batch. SDK cukup bisa `evaluate()`.
 
-**SDK → JS** (mode antrean, paling sederhana: SDK cukup bisa `evaluate(script)`)
-1. Buat context QuickJS. Opsional: pasang `globalThis.__xp_native = { send(batchJson) }` untuk mode bridge.
-2. Unduh `manifest.json` → `components[nama].native.file`, lalu verifikasi `sha256`-nya.
-3. `eval(bundle)` (QuickJS di Android, JavaScriptCore di iOS), lalu panggil `XP.mount(propsJson)`.
-4. Saat ada event: `XP.dispatch(handlerKey, argsJson)`.
-5. Setiap `XP.*` mengembalikan string JSON berisi daftar batch, sinkron. Tidak perlu menjalankan microtask. (Mode bridge: batch dikirim lewat `send`, dan hasilnya `"[]"`.)
+Opsional, SDK bisa memasang `globalThis.__xp_native = { send(batchJson) }`. Dengan itu batch dikirim lewat `send` dan `XP.*` mengembalikan `"[]"`.
 
-**JS → SDK**, lewat `send`:
+Contoh batch:
+
 ```json
 { "v": 1, "ops": [
   ["create", 5, "Pressable"],
-  ["props", 5, { "style": {…}, "onPress": { "$fn": "5:onPress" } }],
+  ["props", 5, { "style": {}, "onPress": { "$fn": "5:onPress" } }],
   ["children", 0, [1]],
   ["delete", 7]
 ]}
@@ -359,19 +403,27 @@ Ini satu-satunya kontrak yang perlu diimplementasikan tim mobile (`runtime/proto
 
 | Op | Arti |
 |---|---|
-| `create id type` | buat node primitive |
-| `props id {…}` | prop yang berubah saja; `null` = hapus; `{"$fn": key}` = handler event |
-| `children id [ids]` | urutan anak lengkap; node `0` = root |
+| `create id type` | buat node |
+| `props id {...}` | hanya prop yang berubah. `null` artinya dihapus, `{"$fn": key}` artinya handler event |
+| `children id [ids]` | urutan lengkap anak. Node `0` adalah root |
 | `delete id` | hapus node |
 
-`#text` adalah teks mentah: gabungkan semua `#text` di dalam `Text` menjadi satu string. Layout dari `style` dihitung dengan Yoga (flexbox), lalu view SwiftUI/Compose ditempatkan sesuai hasilnya.
+Node `#text` berisi teks mentah. Gabungkan semua `#text` di dalam satu `Text` menjadi satu string.
 
 ## Status
 
-- **M1 (selesai, teruji):** runtime, protokol, host native/DOM/SSR, CLI build + manifest. Bundle native dijalankan di QuickJS, dan hasilnya (modal, state, total, kondisional, event, update props, unmount) diverifikasi lewat tree operasi.
-- **Target web React/Vue/Svelte + CLI (selesai, teruji):** SSR + hydrate + scoped CSS di jsdom dan di Chromium, baik di app Next.js maupun Nuxt. Build parsial dan mode interaktif juga diuji, termasuk dari proyek terpisah lewat paket npm.
-- **Adapter Next.js & Nuxt (selesai, teruji di Chromium):** import `xp:ui/nama`, SSR + hydrate, tipe otomatis, update tanpa rebuild. Nuxt dibangun di atas `@xp/vite`, yang juga bisa dipakai untuk SvelteKit.
-- **SDK Android (`adapters/android`):** `XPView(base, name, props)`, yang memakai QuickJS (zipline) + Jetpack Compose, plus demo app. Inti-nya (tree, style, JSON) teruji dengan kotlinc terhadap sesi rekaman QuickJS. Bagian Compose belum dikompilasi di sini; lihat `adapters/android/README.md`.
-- **SDK iOS (`adapters/ios`):** `XPView(base:name:props:)`, yang memakai JavaScriptCore + SwiftUI, plus demo `ContentView`. Bundle native sudah terbukti jalan di JavaScriptCore (disimulasikan lewat Bun dengan alur yang sama seperti `XPEngine`). Kode Swift belum dikompilasi; jalankan `swift test` di Mac untuk memastikannya.
-- **M2 sisa:** uji Android & iOS di emulator/simulator, Yoga untuk layout identik.
-- **M3:** dev server + HMR ke device, API plugin, signing bundle, pengecekan kapabilitas host, hydration yang mengklaim node SSR (saat ini client merender ulang isi yang identik).
+Yang sudah dites:
+
+- Runtime, protokol, host DOM/SSR/native, CLI, dan manifest. Bundle native dijalankan di QuickJS dan hasil tree-nya dicek di unit test.
+- Target web untuk React, Vue, dan Svelte (SSR, hydrate, scoped CSS) di jsdom dan Chromium.
+- Adapter Next.js dan Nuxt, end-to-end di Chromium.
+- CLI dari proyek terpisah lewat `npm pack`, termasuk mode interaktif.
+
+Yang belum:
+
+- SDK Android: bagian tree, style, dan JSON sudah dites dengan kotlinc, tapi bagian Compose belum pernah dikompilasi atau dijalankan di emulator.
+- SDK iOS: bundle native sudah jalan di JavaScriptCore (lewat Bun), tapi kode Swift belum dikompilasi. Jalankan `swift test` di Mac.
+- Belum ada GIF demo untuk Android dan iOS.
+- Layout di mobile belum memakai Yoga, jadi hasilnya bisa sedikit berbeda dari web.
+- Belum ada swipe/gesture, `setTimeout` di device, dev server dengan HMR ke device, dan signing bundle.
+- Hydration belum mengklaim node hasil SSR. Client merender ulang isi yang sama.
