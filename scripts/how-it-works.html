@@ -21,13 +21,13 @@
   .box { border:1.5px solid var(--line); border-radius:8px; background:var(--panel); }
   .label { font-size:12px; letter-spacing:1.5px; font-weight:700; color:var(--teal); text-align:center; }
   .hint { font-size:11px; color:var(--dim); text-align:center; }
-  .code { font-size:11px; line-height:17px; color:#c9d1d9; white-space:pre; }
+  .code { font-size:9.5px; line-height:17px; color:#c9d1d9; white-space:pre; }
   .tag { color:var(--teal); } .str { color:var(--amber); } .kw { color:var(--blue); }
   .row { font-size:11px; padding:5px 10px; border-top:1px solid #1d3236; white-space:nowrap; display:flex; justify-content:space-between; }
   .row .h { color:var(--dim); }
   .op { font-size:11.5px; line-height:19px; white-space:pre; }
   .op .k { color:var(--teal); } .op .up { color:var(--amber); }
-  .chip { font-size:10px; letter-spacing:1px; padding:3px 7px; border:1px solid var(--line); border-radius:4px; color:var(--dim); text-align:center; white-space:nowrap; }
+  .chip { font-size:9px; letter-spacing:0; padding:3px 7px; border:1px solid var(--line); border-radius:4px; color:var(--dim); text-align:center; white-space:nowrap; }
   .caption { bottom:16px; left:50%; transform:translateX(-50%); border:1.5px solid #3a4148; border-radius:20px; padding:8px 20px; font-size:15px; font-weight:700; white-space:nowrap; background:#0d1419; }
   .phone { border:2px solid var(--blue); border-radius:16px; background:#0d1520; overflow:hidden; }
   .screen { position:absolute; left:8px; right:8px; top:16px; bottom:16px; border-radius:6px; overflow:hidden; }
@@ -38,22 +38,22 @@
   <div class="abs sub">satu komponen, dimuat lewat URL, dirender native</div>
   <div class="abs pill" id="pill">1/6 · TULIS KOMPONEN</div>
 
-  <div class="abs counter" style="left:40px"><div class="n" id="nOps">0</div><div><div class="l">OPERASI UI</div><div class="s">dikirim JS ke SDK</div></div></div>
+  <div class="abs counter" style="left:40px"><div class="n" id="nOps">0</div><div><div class="l">OPERASI UI</div><div class="s">JS → SDK mobile</div></div></div>
   <div class="abs counter" style="right:40px"><div class="n" id="nPlat" style="color:var(--teal)">0</div><div><div class="l">PLATFORM</div><div class="s">web, Android, iOS</div></div></div>
 
   <svg class="abs" id="wires" width="900" height="680" style="left:0;top:0">
     <g fill="none" stroke="#2f6b64" stroke-width="1.6" stroke-dasharray="6 6">
-      <path id="w0" d="M250 290 H340"/>
-      <path id="w1" d="M560 260 C600 260 600 255 640 255"/>
-      <path id="w2" d="M560 300 C650 300 698 300 698 358"/>
-      <path id="w3" d="M560 320 C760 320 812 300 812 358"/>
+      <path id="w0" d="M274 290 H340"/>
+      <path id="w1" d="M560 293 C605 293 600 255 640 255"/>
+      <path id="w2" d="M560 317 C650 317 698 310 698 358"/>
+      <path id="w3" d="M560 317 C760 317 812 300 812 358"/>
       <path id="w4" d="M650 480 H600"/>
     </g>
     <g id="dots"></g>
   </svg>
 
   <!-- 1. komponen -->
-  <div class="abs" style="left:40px;top:215px;width:210px">
+  <div class="abs" style="left:30px;top:215px;width:244px">
     <div class="box" id="src" style="height:150px;padding:10px 12px">
       <div class="mono" style="font-size:10px;color:var(--dim);letter-spacing:1px;margin-bottom:6px">src/promo-modal.tsx</div>
       <div class="mono code" id="code"></div>
@@ -61,7 +61,7 @@
     <div class="label" style="margin-top:8px">KOMPONEN</div>
     <div class="hint">JSX + hooks, ditulis sekali</div>
   </div>
-  <div class="abs mono" id="buildLbl" style="left:262px;top:298px;font-size:10px;color:var(--teal);letter-spacing:1px">xp build</div>
+  <div class="abs mono" id="buildLbl" style="left:281px;top:270px;font-size:9.5px;color:var(--teal);letter-spacing:1px">xp build</div>
 
   <!-- 2. CDN -->
   <div class="abs" style="left:340px;top:205px;width:220px">
@@ -77,25 +77,25 @@
     <div class="box" style="height:110px;overflow:hidden;border-color:var(--blue)">
       <div style="height:16px;background:#141f2b;display:flex;gap:4px;align-items:center;padding-left:7px">
         <span style="width:6px;height:6px;border-radius:50%;background:#ff5f56"></span><span style="width:6px;height:6px;border-radius:50%;background:#ffbd2e"></span><span style="width:6px;height:6px;border-radius:50%;background:#27c93f"></span>
+        <span id="chipWeb" style="margin-left:auto;margin-right:8px;font-size:9px;color:var(--dim)">web.js · SSR + hydrate</span>
       </div>
       <div class="screen" id="scrWeb" style="top:22px;bottom:6px"></div>
     </div>
   </div>
   <div class="abs" style="left:640px;top:186px;width:220px"><div class="label" style="color:var(--blue)">BROWSER</div></div>
-  <div class="abs chip" id="chipWeb" style="left:700px;top:320px;width:100px">DOM · SSR</div>
-
+  
   <div class="abs phone" style="left:650px;top:360px;width:96px;height:170px"><div class="screen" id="scrAnd"></div></div>
   <div class="abs phone" style="left:764px;top:360px;width:96px;height:170px"><div class="screen" id="scrIos"></div></div>
   <div class="abs label" style="left:640px;top:535px;width:116px;color:var(--blue)">ANDROID</div>
   <div class="abs label" style="left:754px;top:535px;width:116px;color:var(--blue)">iOS</div>
-  <div class="abs chip" id="chipAnd" style="left:650px;top:553px;width:96px">QuickJS→Compose</div>
-  <div class="abs chip" id="chipIos" style="left:764px;top:553px;width:96px">JSC→SwiftUI</div>
+  <div class="abs chip" id="chipAnd" style="left:643px;top:553px;width:110px">QuickJS → Compose</div>
+  <div class="abs chip" id="chipIos" style="left:757px;top:553px;width:110px">JSC → SwiftUI</div>
   <div class="abs" id="tap" style="width:22px;height:22px;border-radius:50%;border:2px solid var(--teal);background:rgba(110,231,200,.3);opacity:0"></div>
 
   <!-- 4. operasi UI -->
   <div class="abs" style="left:40px;top:430px;width:560px">
     <div class="box" style="height:150px;padding:8px 12px;overflow:hidden">
-      <div style="font-size:10px;letter-spacing:1.5px;color:var(--dim);margin-bottom:4px">OPERASI UI · protocol v1</div>
+      <div style="font-size:10px;letter-spacing:1.5px;color:var(--dim);margin-bottom:4px">OPERASI UI · protocol v1 · Android &amp; iOS</div>
       <div class="mono" id="ops"></div>
     </div>
   </div>
@@ -139,8 +139,8 @@ const OPS = [
 const STEPS = [
   [0, "1/6 · TULIS KOMPONEN", "kamu menulis komponen sekali, pakai JSX biasa."],
   [2.6, "2/6 · BUILD", "xp build membuat bundle web, native, dan manifest."],
-  [5.2, "3/6 · MUAT LEWAT URL", "app mengunduh manifest, lalu bundle-nya. hash dicek."],
-  [8.2, "4/6 · JALANKAN", "bundle jalan di QuickJS / JavaScriptCore, keluar operasi UI."],
+  [5.2, "3/6 · MUAT LEWAT URL", "browser memuat web.js (SSR). Android & iOS memuat native.js."],
+  [8.2, "4/6 · JALANKAN", "native.js jalan di QuickJS / JavaScriptCore, keluar operasi UI."],
   [11.4, "5/6 · RENDER NATIVE", "SDK menggambar komponen asli Compose & SwiftUI."],
   [14.0, "6/6 · EVENT", "tap → XP.dispatch → operasi baru → modal native."],
 ];
@@ -157,7 +157,7 @@ for (const [w] of PARTICLES) {
 
 function ui(kind, t) {
   // Isi layar: kartu promo; modal muncul setelah tap.
-  const show = ease(seg(t, 11.6, 12.4));
+  const show = kind === "web" ? ease(seg(t, 6.6, 7.2)) : ease(seg(t, 11.6, 12.4));
   const modalT = kind === "and" ? ease(seg(t, 15.7, 16.2)) : kind === "ios" ? ease(seg(t, 16.8, 17.3)) : 0;
   const small = kind === "web";
   const pad = small ? 8 : 6;
@@ -221,8 +221,8 @@ function render(t) {
   // 3. hash dicek
   const chipOn = (el, a, label) => {
     el.style.color = t >= a ? "#6ee7c8" : "";
-    el.style.borderColor = t >= a ? "#6ee7c8" : "";
-    el.style.boxShadow = t >= a && t < a + 2.5 ? "0 0 10px rgba(110,231,200,.35)" : "";
+    if (el.id !== "chipWeb") el.style.borderColor = t >= a ? "#6ee7c8" : "";
+    if (el.id !== "chipWeb") el.style.boxShadow = t >= a && t < a + 2.5 ? "0 0 10px rgba(110,231,200,.35)" : "";
   };
   chipOn($("chipWeb"), 6.9);
   chipOn($("chipAnd"), 8.3);
@@ -234,7 +234,7 @@ function render(t) {
     const a = seg(t, at, at + 0.25);
     return `<div class="op" style="opacity:${a}">${html}</div>`;
   }).slice(-6).join("");
-  $("nPlat").textContent = [11.8, 12.1, 12.4].filter((x) => t >= x).length;
+  $("nPlat").textContent = [6.9, 11.8, 12.1].filter((x) => t >= x).length;
   $("nOps").textContent = shown.filter(([, h]) => !h.includes("dispatch")).length;
 
   // 5. layar

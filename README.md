@@ -392,7 +392,7 @@ Untuk server `http://` saat development, tambahkan `NSAllowsLocalNetworking` di 
 
 ## Cara kerja dan protokol
 
-![Cara kerja xp: build, muat lewat URL, operasi UI, render native](docs/how-xp-works.gif)
+![Cara kerja xp: build, muat lewat URL, operasi UI, render native](docs/xp-flow.gif)
 
 Runtime (reconciler dan hooks) sama di semua platform. Runtime tidak menggambar apa pun, hanya menghasilkan daftar operasi UI. Yang menggambar adalah host di tiap platform.
 
