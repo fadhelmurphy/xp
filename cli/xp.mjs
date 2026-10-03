@@ -70,15 +70,28 @@ function summary(r) {
 async function interactive(components, opts) {
   const p = await import("@clack/prompts");
   p.intro("xp build");
-  const picked = await p.multiselect({
-    message: "Komponen mana yang mau di-build? (spasi: pilih, enter: lanjut)",
-    options: components.map((c) => ({ value: c.name, label: c.name, hint: KIND[c.kind] })),
-    initialValues: components.map((c) => c.name),
-    required: true,
-  });
-  if (p.isCancel(picked)) {
+  const cancel = (v) => {
+    if (!p.isCancel(v)) return;
     p.cancel("Dibatalkan.");
     process.exit(0);
+  };
+  const mode = await p.select({
+    message: "Komponen yang mau di-build?",
+    initialValue: "all",
+    options: [
+      { value: "all", label: `Semua (${components.length})`, hint: components.map((c) => c.name).join(", ") },
+      { value: "pick", label: "Pilih sendiri" },
+    ],
+  });
+  cancel(mode);
+  let picked = components.map((c) => c.name);
+  if (mode === "pick") {
+    picked = await p.multiselect({
+      message: "Pilih komponen (spasi: pilih, a: semua, enter: lanjut)",
+      options: components.map((c) => ({ value: c.name, label: c.name, hint: KIND[c.kind] })),
+      required: true,
+    });
+    cancel(picked);
   }
   const target = await p.select({
     message: "Target build?",
@@ -89,10 +102,7 @@ async function interactive(components, opts) {
       { value: "crossplatform", label: "crossplatform", hint: "web + iOS/Android, hanya komponen @xp/runtime" },
     ],
   });
-  if (p.isCancel(target)) {
-    p.cancel("Dibatalkan.");
-    process.exit(0);
-  }
+  cancel(target);
   return { selected: components.filter((c) => picked.includes(c.name)), target, explicit: false, prompts: p };
 }
 
