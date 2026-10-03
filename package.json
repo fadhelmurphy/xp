@@ -1,6 +1,6 @@
 {
   "name": "xp",
-  "version": "1.0.0",
+  "version": "0.1.0",
   "description": "",
   "scripts": {
     "build": "node cli/xp.mjs build examples --out dist",
@@ -9,7 +9,8 @@
     "serve": "node cli/xp.mjs serve dist --port 4400",
     "e2e": "node tests/e2e/consumer.mjs",
     "sync-fixtures": "node scripts/sync-fixtures.mjs",
-    "demo:gif": "node scripts/record-demo.mjs"
+    "demo:gif": "node scripts/record-demo.mjs",
+    "demo:terminal": "node scripts/record-terminal.mjs"
   },
   "keywords": [],
   "author": "",

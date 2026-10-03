@@ -11,6 +11,8 @@ npm run e2e     # app konsumen (Next.js/Nuxt) di Chromium, APP_URL=http://localh
 npm run demo:gif  # rekam ulang GIF demo web, APP_URL=... OUT=docs/demo-next.gif
 ```
 
+![Demo build: satu perintah menghasilkan bundle web, bundle native, dan tipe props untuk setiap komponen](docs/demo-build.gif)
+
 ```
 dist/
   manifest.json                      → nama → file terbaru, hash, primitive yang dipakai
