@@ -1,0 +1,12 @@
+{
+  "name": "@xp/vite",
+  "version": "0.1.0",
+  "description": "Inti adapter xp untuk framework berbasis Vite (Nuxt, SvelteKit, ...): import \"xp:ui/nama\"",
+  "type": "module",
+  "exports": {
+    ".": "./index.js",
+    "./runtime": "./runtime.js"
+  },
+  "files": ["index.js", "runtime.js"],
+  "peerDependencies": { "vite": ">=5" }
+}

@@ -1,0 +1,5 @@
+node_modules
+.next
+.xp
+xp-env.d.ts
+next-env.d.ts

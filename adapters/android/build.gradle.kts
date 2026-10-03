@@ -1,0 +1,7 @@
+// Versi dipusatkan di sini. Kalau Android Studio menyarankan upgrade, aman untuk diikuti.
+plugins {
+    id("com.android.library") version "8.10.1" apply false
+    id("com.android.application") version "8.10.1" apply false
+    id("org.jetbrains.kotlin.android") version "2.2.0" apply false
+    id("org.jetbrains.kotlin.plugin.compose") version "2.2.0" apply false
+}

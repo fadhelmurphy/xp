@@ -1,0 +1,815 @@
+[
+  {
+    "call": "XP.mount(\"{\\\"title\\\":\\\"Kelas IELTS\\\",\\\"price\\\":150000,\\\"seats\\\":3}\")",
+    "batches": [
+      {
+        "v": 1,
+        "ops": [
+          [
+            "create",
+            1,
+            "View"
+          ],
+          [
+            "props",
+            1,
+            {
+              "style": {
+                "padding": 16,
+                "gap": 12,
+                "backgroundColor": "#FFFFFF",
+                "borderRadius": 12
+              }
+            }
+          ],
+          [
+            "create",
+            2,
+            "Text"
+          ],
+          [
+            "props",
+            2,
+            {
+              "testID": "title",
+              "style": {
+                "fontSize": 18,
+                "fontWeight": "700"
+              }
+            }
+          ],
+          [
+            "create",
+            3,
+            "#text"
+          ],
+          [
+            "props",
+            3,
+            {
+              "value": "Kelas IELTS"
+            }
+          ],
+          [
+            "children",
+            2,
+            [
+              3
+            ]
+          ],
+          [
+            "create",
+            4,
+            "Text"
+          ],
+          [
+            "props",
+            4,
+            {
+              "style": {
+                "color": "#57606A"
+              }
+            }
+          ],
+          [
+            "create",
+            5,
+            "#text"
+          ],
+          [
+            "props",
+            5,
+            {
+              "value": "Rp150.000"
+            }
+          ],
+          [
+            "create",
+            6,
+            "#text"
+          ],
+          [
+            "props",
+            6,
+            {
+              "value": " / orang"
+            }
+          ],
+          [
+            "children",
+            4,
+            [
+              5,
+              6
+            ]
+          ],
+          [
+            "create",
+            7,
+            "Pressable"
+          ],
+          [
+            "props",
+            7,
+            {
+              "testID": "open",
+              "style": {
+                "backgroundColor": "#1F6FEB",
+                "paddingVertical": 10,
+                "paddingHorizontal": 16,
+                "borderRadius": 8,
+                "alignItems": "center"
+              },
+              "onPress": {
+                "$fn": "7:onPress"
+              }
+            }
+          ],
+          [
+            "create",
+            8,
+            "Text"
+          ],
+          [
+            "props",
+            8,
+            {
+              "style": {
+                "color": "#FFFFFF",
+                "fontWeight": "600"
+              }
+            }
+          ],
+          [
+            "create",
+            9,
+            "#text"
+          ],
+          [
+            "props",
+            9,
+            {
+              "value": "Lihat detail"
+            }
+          ],
+          [
+            "children",
+            8,
+            [
+              9
+            ]
+          ],
+          [
+            "children",
+            7,
+            [
+              8
+            ]
+          ],
+          [
+            "create",
+            10,
+            "Modal"
+          ],
+          [
+            "props",
+            10,
+            {
+              "visible": false,
+              "onRequestClose": {
+                "$fn": "10:onRequestClose"
+              }
+            }
+          ],
+          [
+            "create",
+            11,
+            "View"
+          ],
+          [
+            "props",
+            11,
+            {
+              "style": {
+                "backgroundColor": "#FFFFFF",
+                "borderRadius": 12,
+                "padding": 20,
+                "gap": 12,
+                "width": "100%",
+                "maxWidth": 360
+              }
+            }
+          ],
+          [
+            "create",
+            12,
+            "Text"
+          ],
+          [
+            "props",
+            12,
+            {
+              "style": {
+                "fontSize": 16,
+                "fontWeight": "700"
+              }
+            }
+          ],
+          [
+            "create",
+            13,
+            "#text"
+          ],
+          [
+            "props",
+            13,
+            {
+              "value": "Daftar "
+            }
+          ],
+          [
+            "create",
+            14,
+            "#text"
+          ],
+          [
+            "props",
+            14,
+            {
+              "value": "Kelas IELTS"
+            }
+          ],
+          [
+            "children",
+            12,
+            [
+              13,
+              14
+            ]
+          ],
+          [
+            "create",
+            15,
+            "View"
+          ],
+          [
+            "props",
+            15,
+            {
+              "style": {
+                "flexDirection": "row",
+                "alignItems": "center",
+                "gap": 12
+              }
+            }
+          ],
+          [
+            "create",
+            16,
+            "Pressable"
+          ],
+          [
+            "props",
+            16,
+            {
+              "testID": "minus",
+              "style": {
+                "backgroundColor": "#FFFFFF",
+                "paddingVertical": 10,
+                "paddingHorizontal": 16,
+                "borderRadius": 8,
+                "alignItems": "center",
+                "borderWidth": 1,
+                "borderColor": "#1F6FEB"
+              },
+              "disabled": true,
+              "onPress": {
+                "$fn": "16:onPress"
+              }
+            }
+          ],
+          [
+            "create",
+            17,
+            "Text"
+          ],
+          [
+            "props",
+            17,
+            {
+              "style": {
+                "color": "#1F6FEB"
+              }
+            }
+          ],
+          [
+            "create",
+            18,
+            "#text"
+          ],
+          [
+            "props",
+            18,
+            {
+              "value": "−"
+            }
+          ],
+          [
+            "children",
+            17,
+            [
+              18
+            ]
+          ],
+          [
+            "children",
+            16,
+            [
+              17
+            ]
+          ],
+          [
+            "create",
+            19,
+            "Text"
+          ],
+          [
+            "props",
+            19,
+            {
+              "testID": "qty"
+            }
+          ],
+          [
+            "create",
+            20,
+            "#text"
+          ],
+          [
+            "props",
+            20,
+            {
+              "value": "Peserta: "
+            }
+          ],
+          [
+            "create",
+            21,
+            "#text"
+          ],
+          [
+            "props",
+            21,
+            {
+              "value": "1"
+            }
+          ],
+          [
+            "children",
+            19,
+            [
+              20,
+              21
+            ]
+          ],
+          [
+            "create",
+            22,
+            "Pressable"
+          ],
+          [
+            "props",
+            22,
+            {
+              "testID": "plus",
+              "style": {
+                "backgroundColor": "#FFFFFF",
+                "paddingVertical": 10,
+                "paddingHorizontal": 16,
+                "borderRadius": 8,
+                "alignItems": "center",
+                "borderWidth": 1,
+                "borderColor": "#1F6FEB"
+              },
+              "disabled": false,
+              "onPress": {
+                "$fn": "22:onPress"
+              }
+            }
+          ],
+          [
+            "create",
+            23,
+            "Text"
+          ],
+          [
+            "props",
+            23,
+            {
+              "style": {
+                "color": "#1F6FEB"
+              }
+            }
+          ],
+          [
+            "create",
+            24,
+            "#text"
+          ],
+          [
+            "props",
+            24,
+            {
+              "value": "+"
+            }
+          ],
+          [
+            "children",
+            23,
+            [
+              24
+            ]
+          ],
+          [
+            "children",
+            22,
+            [
+              23
+            ]
+          ],
+          [
+            "children",
+            15,
+            [
+              16,
+              19,
+              22
+            ]
+          ],
+          [
+            "create",
+            25,
+            "Text"
+          ],
+          [
+            "props",
+            25,
+            {
+              "testID": "total",
+              "style": {
+                "fontWeight": "600"
+              }
+            }
+          ],
+          [
+            "create",
+            26,
+            "#text"
+          ],
+          [
+            "props",
+            26,
+            {
+              "value": "Total: "
+            }
+          ],
+          [
+            "create",
+            27,
+            "#text"
+          ],
+          [
+            "props",
+            27,
+            {
+              "value": "Rp150.000"
+            }
+          ],
+          [
+            "children",
+            25,
+            [
+              26,
+              27
+            ]
+          ],
+          [
+            "create",
+            28,
+            "Pressable"
+          ],
+          [
+            "props",
+            28,
+            {
+              "testID": "close",
+              "style": {
+                "backgroundColor": "#1F6FEB",
+                "paddingVertical": 10,
+                "paddingHorizontal": 16,
+                "borderRadius": 8,
+                "alignItems": "center"
+              },
+              "onPress": {
+                "$fn": "28:onPress"
+              }
+            }
+          ],
+          [
+            "create",
+            29,
+            "Text"
+          ],
+          [
+            "props",
+            29,
+            {
+              "style": {
+                "color": "#FFFFFF"
+              }
+            }
+          ],
+          [
+            "create",
+            30,
+            "#text"
+          ],
+          [
+            "props",
+            30,
+            {
+              "value": "Tutup"
+            }
+          ],
+          [
+            "children",
+            29,
+            [
+              30
+            ]
+          ],
+          [
+            "children",
+            28,
+            [
+              29
+            ]
+          ],
+          [
+            "children",
+            11,
+            [
+              12,
+              15,
+              25,
+              28
+            ]
+          ],
+          [
+            "children",
+            10,
+            [
+              11
+            ]
+          ],
+          [
+            "children",
+            1,
+            [
+              2,
+              4,
+              7,
+              10
+            ]
+          ],
+          [
+            "children",
+            0,
+            [
+              1
+            ]
+          ]
+        ]
+      }
+    ]
+  },
+  {
+    "call": "XP.dispatch(\"7:onPress\", \"[]\")",
+    "batches": [
+      {
+        "v": 1,
+        "ops": [
+          [
+            "props",
+            10,
+            {
+              "visible": true
+            }
+          ]
+        ]
+      }
+    ]
+  },
+  {
+    "call": "XP.dispatch(\"22:onPress\", \"[]\")",
+    "batches": [
+      {
+        "v": 1,
+        "ops": [
+          [
+            "props",
+            16,
+            {
+              "disabled": false
+            }
+          ],
+          [
+            "props",
+            21,
+            {
+              "value": "2"
+            }
+          ],
+          [
+            "props",
+            27,
+            {
+              "value": "Rp300.000"
+            }
+          ]
+        ]
+      }
+    ]
+  },
+  {
+    "call": "XP.dispatch(\"22:onPress\", \"[]\")",
+    "batches": [
+      {
+        "v": 1,
+        "ops": [
+          [
+            "props",
+            21,
+            {
+              "value": "3"
+            }
+          ],
+          [
+            "props",
+            22,
+            {
+              "disabled": true
+            }
+          ],
+          [
+            "props",
+            27,
+            {
+              "value": "Rp450.000"
+            }
+          ],
+          [
+            "create",
+            31,
+            "Text"
+          ],
+          [
+            "props",
+            31,
+            {
+              "testID": "full",
+              "style": {
+                "color": "#CF222E"
+              }
+            }
+          ],
+          [
+            "create",
+            32,
+            "#text"
+          ],
+          [
+            "props",
+            32,
+            {
+              "value": "Kuota penuh"
+            }
+          ],
+          [
+            "children",
+            31,
+            [
+              32
+            ]
+          ],
+          [
+            "create",
+            33,
+            "Pressable"
+          ],
+          [
+            "props",
+            33,
+            {
+              "testID": "close",
+              "style": {
+                "backgroundColor": "#1F6FEB",
+                "paddingVertical": 10,
+                "paddingHorizontal": 16,
+                "borderRadius": 8,
+                "alignItems": "center"
+              },
+              "onPress": {
+                "$fn": "33:onPress"
+              }
+            }
+          ],
+          [
+            "create",
+            34,
+            "Text"
+          ],
+          [
+            "props",
+            34,
+            {
+              "style": {
+                "color": "#FFFFFF"
+              }
+            }
+          ],
+          [
+            "create",
+            35,
+            "#text"
+          ],
+          [
+            "props",
+            35,
+            {
+              "value": "Tutup"
+            }
+          ],
+          [
+            "children",
+            34,
+            [
+              35
+            ]
+          ],
+          [
+            "children",
+            33,
+            [
+              34
+            ]
+          ],
+          [
+            "delete",
+            30
+          ],
+          [
+            "delete",
+            29
+          ],
+          [
+            "delete",
+            28
+          ],
+          [
+            "children",
+            11,
+            [
+              12,
+              15,
+              25,
+              31,
+              33
+            ]
+          ]
+        ]
+      }
+    ]
+  },
+  {
+    "call": "XP.dispatch(\"33:onPress\", \"[]\")",
+    "batches": [
+      {
+        "v": 1,
+        "ops": [
+          [
+            "props",
+            10,
+            {
+              "visible": false
+            }
+          ]
+        ]
+      }
+    ]
+  },
+  {
+    "call": "XP.dispatch(\"0:none\", \"[]\")",
+    "batches": []
+  }
+]

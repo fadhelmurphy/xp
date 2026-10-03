@@ -1,0 +1,24 @@
+node_modules/
+dist/
+*.tgz
+*.tsbuildinfo
+
+# lockfile app contoh berisi hash .tgz lokal; dibuat ulang saat npm install
+examples-consumer/*/package-lock.json
+adapters/*/package-lock.json
+
+# hasil build framework
+.next/
+.nuxt/
+.output/
+.xp/
+xp-env.d.ts
+next-env.d.ts
+
+# android
+.gradle/
+build/
+local.properties
+.idea/
+*.iml
+.kotlin/
