@@ -45,7 +45,7 @@ Opsi `build`:
 -y, --yes          jangan tanya apa-apa
 ```
 
-Kalau dijalankan di terminal tanpa `--target` atau `--only`, xp akan menanyakan komponen mana yang mau di-build dan targetnya.
+Kalau dijalankan di terminal tanpa `--target` atau `--only`, xp akan bertanya dulu: build semua komponen atau pilih sendiri (bisa satu atau beberapa), lalu targetnya.
 
 Arti target:
 
