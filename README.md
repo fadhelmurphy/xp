@@ -392,10 +392,7 @@ Untuk server `http://` saat development, tambahkan `NSAllowsLocalNetworking` di 
 
 ## Cara kerja dan protokol
 
-```
-komponen.tsx --xp build--> web.js     DOM (browser) / HTML (SSR)
-                           native.js  QuickJS / JavaScriptCore -> operasi UI -> Compose / SwiftUI
-```
+![Cara kerja xp: build, muat lewat URL, operasi UI, render native](docs/how-it-works.gif)
 
 Runtime (reconciler dan hooks) sama di semua platform. Runtime tidak menggambar apa pun, hanya menghasilkan daftar operasi UI. Yang menggambar adalah host di tiap platform.
 

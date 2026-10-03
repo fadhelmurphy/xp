@@ -1,0 +1,257 @@
+<!doctype html>
+<!-- Animasi "cara kerja xp". Dirender per frame oleh scripts/record-how-it-works.mjs. -->
+<meta charset="utf-8">
+<style>
+  :root { --bg:#0b1116; --line:#2a5a55; --teal:#6ee7c8; --blue:#7aa2ff; --text:#e6edf3; --dim:#8b949e; --amber:#d9a75f; --panel:#0f1a20; }
+  * { box-sizing: border-box; }
+  html, body { margin:0; background:var(--bg); }
+  #stage { position:relative; width:900px; height:680px; overflow:hidden; color:var(--text); font-family:"DejaVu Sans",sans-serif; }
+  .abs { position:absolute; }
+  .mono { font-family:"DejaVu Sans Mono",monospace; }
+  h1 { position:absolute; top:22px; width:100%; margin:0; text-align:center; font-size:34px; font-weight:400; letter-spacing:1px; }
+  h1 b { color:var(--teal); font-weight:700; }
+  .sub { top:68px; width:100%; text-align:center; color:var(--blue); font-size:14px; }
+  .pill { top:96px; left:50%; transform:translateX(-50%); border:1.5px solid var(--line); border-radius:18px; padding:6px 16px;
+          color:var(--teal); font-size:13px; letter-spacing:1.5px; font-weight:700; white-space:nowrap; }
+  .counter { top:136px; width:250px; height:52px; border:1.5px solid var(--line); border-radius:6px; display:flex; align-items:center; gap:14px; padding:0 16px;
+             clip-path:polygon(10px 0,100% 0,100% calc(100% - 10px),calc(100% - 10px) 100%,0 100%,0 10px); background:var(--panel); }
+  .counter .n { font-size:26px; font-weight:700; color:var(--blue); width:44px; text-align:center; }
+  .counter .l { font-size:12px; letter-spacing:1.5px; color:var(--text); font-weight:700; }
+  .counter .s { font-size:11px; color:var(--dim); }
+  .box { border:1.5px solid var(--line); border-radius:8px; background:var(--panel); }
+  .label { font-size:12px; letter-spacing:1.5px; font-weight:700; color:var(--teal); text-align:center; }
+  .hint { font-size:11px; color:var(--dim); text-align:center; }
+  .code { font-size:11px; line-height:17px; color:#c9d1d9; white-space:pre; }
+  .tag { color:var(--teal); } .str { color:var(--amber); } .kw { color:var(--blue); }
+  .row { font-size:11px; padding:5px 10px; border-top:1px solid #1d3236; white-space:nowrap; display:flex; justify-content:space-between; }
+  .row .h { color:var(--dim); }
+  .op { font-size:11.5px; line-height:19px; white-space:pre; }
+  .op .k { color:var(--teal); } .op .up { color:var(--amber); }
+  .chip { font-size:10px; letter-spacing:1px; padding:3px 7px; border:1px solid var(--line); border-radius:4px; color:var(--dim); text-align:center; white-space:nowrap; }
+  .caption { bottom:16px; left:50%; transform:translateX(-50%); border:1.5px solid #3a4148; border-radius:20px; padding:8px 20px; font-size:15px; font-weight:700; white-space:nowrap; background:#0d1419; }
+  .phone { border:2px solid var(--blue); border-radius:16px; background:#0d1520; overflow:hidden; }
+  .screen { position:absolute; left:8px; right:8px; top:16px; bottom:16px; border-radius:6px; overflow:hidden; }
+  .ok { font-size:10px; color:var(--teal); }
+</style>
+<div id="stage">
+  <h1>Cara kerja <b>xp</b></h1>
+  <div class="abs sub">satu komponen, dimuat lewat URL, dirender native</div>
+  <div class="abs pill" id="pill">1/6 · TULIS KOMPONEN</div>
+
+  <div class="abs counter" style="left:40px"><div class="n" id="nOps">0</div><div><div class="l">OPERASI UI</div><div class="s">dikirim JS ke SDK</div></div></div>
+  <div class="abs counter" style="right:40px"><div class="n" style="color:var(--teal)">0</div><div><div class="l">WEBVIEW</div><div class="s">di Android dan iOS</div></div></div>
+
+  <svg class="abs" id="wires" width="900" height="680" style="left:0;top:0">
+    <g fill="none" stroke="#2f6b64" stroke-width="1.6" stroke-dasharray="6 6">
+      <path id="w0" d="M250 290 H340"/>
+      <path id="w1" d="M560 260 C600 260 600 255 640 255"/>
+      <path id="w2" d="M560 300 C650 300 698 300 698 358"/>
+      <path id="w3" d="M560 320 C760 320 812 300 812 358"/>
+      <path id="w4" d="M650 480 H600"/>
+    </g>
+    <g id="dots"></g>
+  </svg>
+
+  <!-- 1. komponen -->
+  <div class="abs" style="left:40px;top:215px;width:210px">
+    <div class="box" id="src" style="height:150px;padding:10px 12px">
+      <div class="mono" style="font-size:10px;color:var(--dim);letter-spacing:1px;margin-bottom:6px">src/promo-modal.tsx</div>
+      <div class="mono code" id="code"></div>
+    </div>
+    <div class="label" style="margin-top:8px">KOMPONEN</div>
+    <div class="hint">JSX + hooks, ditulis sekali</div>
+  </div>
+  <div class="abs mono" id="buildLbl" style="left:262px;top:298px;font-size:10px;color:var(--teal);letter-spacing:1px">xp build</div>
+
+  <!-- 2. CDN -->
+  <div class="abs" style="left:340px;top:205px;width:220px">
+    <div class="box" id="cdn" style="height:175px;overflow:hidden">
+      <div style="padding:8px 10px;font-size:10px;letter-spacing:1.5px;color:var(--dim)">CDN · dist/</div>
+      <div class="mono" id="files"></div>
+    </div>
+  </div>
+  <div class="abs" style="left:340px;top:186px;width:220px"><div class="label">STATIC HOSTING</div></div>
+
+  <!-- 3. perangkat -->
+  <div class="abs" style="left:640px;top:205px;width:220px">
+    <div class="box" style="height:110px;overflow:hidden;border-color:var(--blue)">
+      <div style="height:16px;background:#141f2b;display:flex;gap:4px;align-items:center;padding-left:7px">
+        <span style="width:6px;height:6px;border-radius:50%;background:#ff5f56"></span><span style="width:6px;height:6px;border-radius:50%;background:#ffbd2e"></span><span style="width:6px;height:6px;border-radius:50%;background:#27c93f"></span>
+      </div>
+      <div class="screen" id="scrWeb" style="top:22px;bottom:6px"></div>
+    </div>
+  </div>
+  <div class="abs" style="left:640px;top:186px;width:220px"><div class="label" style="color:var(--blue)">BROWSER</div></div>
+  <div class="abs chip" id="chipWeb" style="left:700px;top:320px;width:100px">DOM · SSR</div>
+
+  <div class="abs phone" style="left:650px;top:360px;width:96px;height:170px"><div class="screen" id="scrAnd"></div></div>
+  <div class="abs phone" style="left:764px;top:360px;width:96px;height:170px"><div class="screen" id="scrIos"></div></div>
+  <div class="abs label" style="left:640px;top:535px;width:116px;color:var(--blue)">ANDROID</div>
+  <div class="abs label" style="left:754px;top:535px;width:116px;color:var(--blue)">iOS</div>
+  <div class="abs chip" id="chipAnd" style="left:650px;top:553px;width:96px">QuickJS→Compose</div>
+  <div class="abs chip" id="chipIos" style="left:764px;top:553px;width:96px">JSC→SwiftUI</div>
+  <div class="abs" id="tap" style="width:22px;height:22px;border-radius:50%;border:2px solid var(--teal);background:rgba(110,231,200,.3);opacity:0"></div>
+
+  <!-- 4. operasi UI -->
+  <div class="abs" style="left:40px;top:430px;width:560px">
+    <div class="box" style="height:150px;padding:8px 12px;overflow:hidden">
+      <div style="font-size:10px;letter-spacing:1.5px;color:var(--dim);margin-bottom:4px">OPERASI UI · protocol v1</div>
+      <div class="mono" id="ops"></div>
+    </div>
+  </div>
+
+  <div class="abs caption" id="cap"></div>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const clamp = (x) => Math.max(0, Math.min(1, x));
+const seg = (t, a, b) => clamp((t - a) / (b - a));
+const ease = (x) => (x < 0.5 ? 2 * x * x : 1 - Math.pow(-2 * x + 2, 2) / 2);
+
+const CODE = [
+  '<span class="kw">export default function</span> Promo() {',
+  '  <span class="kw">const</span> [open, set] = useState(<span class="str">false</span>);',
+  '  <span class="kw">return</span> <span class="tag">&lt;View&gt;</span>',
+  '    <span class="tag">&lt;Pressable</span> onPress={…}<span class="tag">&gt;</span>',
+  '    <span class="tag">&lt;Modal</span> visible={open}<span class="tag">&gt;</span>',
+  '  <span class="tag">&lt;/View&gt;</span>;',
+  '}',
+];
+const FILES = [
+  ["manifest.json", "v1"],
+  ["promo-modal.d.ts", "2ab34c"],
+  ["promo-modal.web.js", "329138"],
+  ["promo-modal.native.js", "8f848b"],
+];
+const OPS = [
+  [8.6, '<span class="k">create</span>   1 View'],
+  [9.0, '<span class="k">create</span>   2 Pressable'],
+  [9.4, '<span class="k">props</span>    2 { onPress: { $fn: "2:onPress" } }'],
+  [9.8, '<span class="k">create</span>   9 Modal'],
+  [10.2, '<span class="k">props</span>    9 { visible: false }'],
+  [10.6, '<span class="k">children</span> 0 [1]'],
+  [14.9, '<span class="up">↑ XP.dispatch("2:onPress")</span>'],
+  [15.7, '<span class="k">props</span>    9 { visible: true }'],
+  [16.5, '<span class="up">↑ XP.dispatch("2:onPress")</span>'],
+  [16.8, '<span class="k">props</span>    9 { visible: true }'],
+];
+const STEPS = [
+  [0, "1/6 · TULIS KOMPONEN", "kamu menulis komponen sekali, pakai JSX biasa."],
+  [2.6, "2/6 · BUILD", "xp build membuat bundle web, native, dan manifest."],
+  [5.2, "3/6 · MUAT LEWAT URL", "app mengunduh manifest, lalu bundle-nya. hash dicek."],
+  [8.2, "4/6 · JALANKAN", "bundle jalan di QuickJS / JavaScriptCore, keluar operasi UI."],
+  [11.4, "5/6 · RENDER NATIVE", "SDK menggambar Compose & SwiftUI. bukan WebView."],
+  [14.0, "6/6 · EVENT", "tap → XP.dispatch → operasi baru → modal native."],
+];
+const DURATION = 19;
+
+// Partikel yang berjalan di sepanjang kabel: [kabel, mulai, durasi]
+const PARTICLES = [["w0", 3.0, 1.0], ["w1", 5.6, 1.1], ["w2", 5.9, 1.1], ["w3", 6.2, 1.1]];
+const dotsEl = $("dots");
+for (const [w] of PARTICLES) {
+  const c = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+  c.setAttribute("r", "7"); c.setAttribute("fill", "#0b1116"); c.setAttribute("stroke", "#6ee7c8"); c.setAttribute("stroke-width", "2");
+  dotsEl.appendChild(c);
+}
+
+function ui(kind, t) {
+  // Isi layar: kartu promo; modal muncul setelah tap.
+  const show = ease(seg(t, 11.6, 12.4));
+  const modalT = kind === "and" ? ease(seg(t, 15.7, 16.2)) : kind === "ios" ? ease(seg(t, 16.8, 17.3)) : 0;
+  const small = kind === "web";
+  const pad = small ? 8 : 6;
+  return `
+    <div style="opacity:${show};transform:translateY(${(1 - show) * 8}px);padding:${pad}px;display:flex;flex-direction:column;gap:5px">
+      <div style="height:${small ? 46 : 54}px;border-radius:6px;background:#1F6FEB;padding:6px">
+        <div style="height:6px;width:60%;background:#fff;border-radius:3px;margin-bottom:5px"></div>
+        <div style="height:4px;width:40%;background:#cfe0ff;border-radius:2px"></div>
+      </div>
+      <div style="height:16px;border-radius:5px;background:#6ee7c8;display:flex;align-items:center;justify-content:center;font-size:8px;color:#0b1116;font-weight:700">Lihat detail</div>
+      ${small ? "" : '<div style="height:5px;width:70%;background:#2b3a48;border-radius:2px"></div><div style="height:5px;width:50%;background:#2b3a48;border-radius:2px"></div>'}
+    </div>
+    <div style="position:absolute;inset:0;background:rgba(0,0,0,${0.55 * modalT})"></div>
+    <div style="position:absolute;left:${kind === "ios" ? 0 : 8}px;right:${kind === "ios" ? 0 : 8}px;${kind === "ios" ? "bottom:0" : "top:30%"};
+      height:${kind === "ios" ? 62 : 52}%;background:#f6f8fa;border-radius:${kind === "ios" ? "8px 8px 0 0" : "6px"};
+      opacity:${modalT};transform:${kind === "ios" ? `translateY(${(1 - modalT) * 100}%)` : `scale(${0.85 + 0.15 * modalT})`};padding:7px">
+      <div style="height:6px;width:70%;background:#1F2328;border-radius:3px;margin-bottom:6px"></div>
+      <div style="display:flex;gap:4px;align-items:center;margin-bottom:6px">
+        <div style="width:12px;height:12px;border-radius:3px;border:1px solid #8c959f"></div>
+        <div style="font-size:8px;color:#1F2328">2</div>
+        <div style="width:12px;height:12px;border-radius:3px;border:1px solid #8c959f"></div>
+      </div>
+      <div style="height:14px;border-radius:4px;background:#1F6FEB"></div>
+    </div>`;
+}
+
+function render(t) {
+  // langkah & caption
+  let step = STEPS[0];
+  for (const s of STEPS) if (t >= s[0]) step = s;
+  $("pill").textContent = step[1];
+  $("cap").textContent = step[2];
+
+  // 1. kode muncul baris per baris
+  const lines = Math.floor(seg(t, 0.3, 2.2) * CODE.length + 0.001);
+  $("code").innerHTML = CODE.slice(0, lines).join("\n");
+  $("src").style.borderColor = t < 2.6 ? "#6ee7c8" : "";
+  $("buildLbl").style.opacity = seg(t, 2.6, 3.0);
+
+  // 2. file di CDN
+  $("files").innerHTML = FILES.map(([f, h], i) => {
+    const a = ease(seg(t, 3.8 + i * 0.35, 4.2 + i * 0.35));
+    return `<div class="row" style="opacity:${a};transform:translateX(${(1 - a) * 10}px)"><span>${f}</span><span class="h">${h}</span></div>`;
+  }).join("");
+  $("cdn").style.borderColor = t >= 2.6 && t < 5.2 ? "#6ee7c8" : "";
+
+  // kabel & partikel
+  for (const [i, id] of ["w0", "w1", "w2", "w3", "w4"].entries()) {
+    const on = [2.6, 5.2, 5.2, 5.2, 8.2][i];
+    $(id).style.opacity = t >= on ? 1 : 0.25;
+  }
+  PARTICLES.forEach(([w, start, dur], i) => {
+    const p = seg(t, start, start + dur);
+    const c = dotsEl.children[i];
+    const path = $(w);
+    const pt = path.getPointAtLength(path.getTotalLength() * ease(p));
+    c.setAttribute("cx", pt.x); c.setAttribute("cy", pt.y);
+    c.style.opacity = p > 0 && p < 1 ? 1 : 0;
+  });
+
+  // 3. hash dicek
+  const chipOn = (el, a, label) => {
+    el.style.color = t >= a ? "#6ee7c8" : "";
+    el.style.borderColor = t >= a ? "#6ee7c8" : "";
+    el.style.boxShadow = t >= a && t < a + 2.5 ? "0 0 10px rgba(110,231,200,.35)" : "";
+  };
+  chipOn($("chipWeb"), 6.9);
+  chipOn($("chipAnd"), 8.3);
+  chipOn($("chipIos"), 8.5);
+
+  // 4. operasi UI
+  const shown = OPS.filter(([at]) => t >= at);
+  $("ops").innerHTML = shown.map(([at, html]) => {
+    const a = seg(t, at, at + 0.25);
+    return `<div class="op" style="opacity:${a}">${html}</div>`;
+  }).slice(-6).join("");
+  $("nOps").textContent = shown.filter(([, h]) => !h.includes("dispatch")).length;
+
+  // 5. layar
+  $("scrWeb").innerHTML = ui("web", t);
+  $("scrAnd").innerHTML = ui("and", t);
+  $("scrIos").innerHTML = ui("ios", t);
+
+  // 6. tap
+  const tap = $("tap");
+  const tapAt = (x, y, a) => {
+    const p = seg(t, a, a + 0.6);
+    return p > 0 && p < 1 ? { x, y, o: Math.sin(p * Math.PI), s: 1 - 0.3 * Math.sin(p * Math.PI) } : null;
+  };
+  const tp = tapAt(687, 452, 14.3) || tapAt(801, 452, 16.3);
+  if (tp) { tap.style.left = tp.x + "px"; tap.style.top = tp.y + "px"; tap.style.opacity = tp.o; tap.style.transform = `scale(${tp.s})`; }
+  else tap.style.opacity = 0;
+}
+window.render = render;
+window.DURATION = DURATION;
+render(new URLSearchParams(location.search).has("t") ? Number(new URLSearchParams(location.search).get("t")) : 0);
+</script>
