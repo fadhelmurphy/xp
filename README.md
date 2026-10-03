@@ -8,6 +8,7 @@ npm run build   # xp build examples --out dist
 npm test        # 17 test: QuickJS (native), SSR, DOM, reconciler
 npm run serve   # xp serve dist --port 4400 (CORS + cache header)
 npm run e2e     # app konsumen (Next.js/Nuxt) di Chromium, APP_URL=http://localhost:3300
+npm run demo:gif  # rekam ulang GIF demo web, APP_URL=... OUT=docs/demo-next.gif
 ```
 
 ```
@@ -40,6 +41,8 @@ export default function PromoModal({ title }: { title: string }) {
 - Di device tidak ada `document`, `window`, `fetch`, maupun `Intl`. Build memberi peringatan kalau bundle native memakainya.
 
 ## Konsumen web: Next.js (`@xp/next`)
+
+![Demo Next.js: komponen promo-modal dimuat dari URL, SSR, lalu modal dan perhitungan total jalan di browser](docs/demo-next.gif)
 
 ```bash
 npm i @xp/next
@@ -76,6 +79,8 @@ APP_URL=http://localhost:3300 npm run e2e             # terminal 3, dari root re
 ```
 
 ## Konsumen web: Nuxt (`@xp/nuxt`)
+
+![Demo Nuxt: komponen yang sama dimuat dari URL di app Nuxt](docs/demo-nuxt.gif)
 
 ```bash
 npm i @xp/vite @xp/nuxt
@@ -145,6 +150,8 @@ Props harus bisa di-JSON-kan (`String`, angka, `Boolean`, `null`, `List`, `Map`)
 
 Saat development dengan emulator, remote lokal diakses lewat `http://10.0.2.2:4400`. Demo app lengkap dan langkah menjalankannya ada di [`adapters/android/README.md`](adapters/android/README.md).
 
+GIF demo Android belum ada. Rekam dari emulator dengan `adb shell screenrecord /sdcard/demo.mp4` (atau tombol *Record* di panel emulator), lalu ubah jadi GIF dengan `ffmpeg` dan simpan sebagai `docs/demo-android.gif`.
+
 ## Konsumen mobile: iOS (`adapters/ios`)
 
 Komponen yang sama dirender dengan SwiftUI. Logikanya dijalankan di JavaScriptCore bawaan iOS, tanpa WebView dan tanpa dependency pihak ketiga. `Modal` tampil sebagai `.sheet`, `Pressable` sebagai `Button`, dan `TextInput` sebagai `TextField`.
@@ -169,6 +176,8 @@ struct PromoScreen: View {
 Props harus bisa di-JSON-kan (`String`, angka, `Bool`, `Array`, `Dictionary`). Kalau props berubah, komponen di-update tanpa remount, sehingga state di dalamnya tetap. Untuk development dengan `http://`, tambahkan `NSAllowsLocalNetworking` di Info.plist. Simulator bisa langsung mengakses `http://localhost:4400` di Mac.
 
 Demo, tes (`swift test`), dan detail lainnya ada di [`adapters/ios/README.md`](adapters/ios/README.md).
+
+GIF demo iOS belum ada. Rekam dari Simulator dengan `xcrun simctl io booted recordVideo demo.mp4`, lalu ubah jadi GIF dengan `ffmpeg` dan simpan sebagai `docs/demo-ios.gif`.
 
 ## Cara kerja
 
