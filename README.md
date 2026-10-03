@@ -12,7 +12,7 @@ npx github:fadhelmurphy/xp build              # interaktif: pilih komponen dan t
 npx github:fadhelmurphy/xp build src -t web    # langsung, tanpa pertanyaan
 ```
 
-![xp build](docs/demo-build.gif)
+![xp build](docs/demo-cli.gif)
 
 ## Daftar isi
 
@@ -109,7 +109,7 @@ Setiap bundle React/Vue/Svelte membawa runtime framework sendiri. Untuk satu dua
 npm install
 npx github:fadhelmurphy/xp build examples -y   # build contoh ke dist/
 npx github:fadhelmurphy/xp serve               # remote di :4400
-npm test                                        # 27 test
+npm test                                        # 28 test
 npm run e2e                                     # tes app Next.js/Nuxt di Chromium (APP_URL=http://localhost:3300)
 ```
 
@@ -132,6 +132,8 @@ export default function PromoModal({ title }: { title: string }) {
 Tidak perlu `import React`. Hooks yang tersedia: `useState`, `useEffect`, `useMemo`, `useCallback`, `useRef`.
 
 Elemen yang bisa dipakai hanya `View`, `Text`, `Image`, `Pressable`, `ScrollView`, `TextInput`, dan `Modal`. Tag HTML akan ditolak TypeScript. Styling lewat prop `style`.
+
+Penjelasan lengkap setiap primitive, props, hooks, dan style ada di [docs/runtime.md](docs/runtime.md).
 
 Di device tidak ada `document`, `window`, `fetch`, atau `Intl`. Kalau bundle native memakainya, build akan memberi peringatan.
 

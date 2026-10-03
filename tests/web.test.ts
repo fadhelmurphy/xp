@@ -74,3 +74,11 @@ test("SSR dan client menghasilkan struktur yang sama", () => {
   const skeleton = (h: string) => norm(h).replace(/style="[^"]*"/g, "");
   assert.equal(skeleton(el.innerHTML), skeleton(ssr));
 });
+
+test("Text numberOfLines memotong teks di web", async () => {
+  const { styleToCss } = await import("../runtime/hosts/web-style");
+  const css = styleToCss("Text", { fontSize: 14 }, { numberOfLines: 2 });
+  assert.equal(css["-webkit-line-clamp"], "2");
+  assert.equal(css.overflow, "hidden");
+  assert.equal(styleToCss("Text", {}, {})["-webkit-line-clamp"], undefined);
+});
