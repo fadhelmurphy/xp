@@ -1,6 +1,6 @@
 // Runtime isomorfik (server & browser), tanpa framework.
 // Dipakai oleh wrapper per framework (Vue, Svelte, ...) yang dibuat plugin xp().
-import { loadBundle } from "./client.js";
+import { loadBundle, runtimeOf } from "./client.js";
 import { verifyManifest } from "./verify.js";
 
 export { swapInstance, watchDev } from "./client.js";
@@ -80,6 +80,7 @@ export async function renderRemote(base, name, props, revalidate = 30, publicKey
   return {
     src,
     sha256: entry.web.sha256,
+    runtime: runtimeOf(base, entry.web),
     html: await mod.renderHTML(props), // Vue: Promise, lainnya: string
     // live: hanya kalau app dijalankan di dev server Vite dan remote-nya `xp dev`.
     live: dev && manifest.dev === true,
@@ -87,8 +88,8 @@ export async function renderRemote(base, name, props, revalidate = 30, publicKey
 }
 
 /** Browser: muat bundle web (file ber-hash → cache browser/CDN), dicek sha256-nya. */
-export function loadClient(src, sha256) {
-  return loadBundle(src, sha256);
+export function loadClient(src, sha256, runtime) {
+  return loadBundle(src, sha256, runtime);
 }
 
 /** Props untuk komponen xp harus bisa di-JSON-kan. Buang function & undefined. */

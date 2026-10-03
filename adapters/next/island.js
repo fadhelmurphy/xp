@@ -4,7 +4,7 @@
 import { createElement, useEffect, useRef } from "react";
 import { loadBundle, swapInstance, watchDev } from "./client.js";
 
-export function XPIsland({ src, sha256, html, props, base, name, live }) {
+export function XPIsland({ src, sha256, runtime, html, props, base, name, live }) {
   const ref = useRef(null);
   const instance = useRef(null);
   const current = useRef(src);
@@ -14,7 +14,7 @@ export function XPIsland({ src, sha256, html, props, base, name, live }) {
 
   useEffect(() => {
     let cancelled = false;
-    loadBundle(src, sha256)
+    loadBundle(src, sha256, runtime)
       .then((mod) => {
         if (cancelled || !ref.current) return;
         if (instance.current) instance.current.update(props);

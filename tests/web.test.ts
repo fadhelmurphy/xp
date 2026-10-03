@@ -3,21 +3,17 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import { JSDOM } from "jsdom";
+import { evaluate, loadWeb } from "./load-web";
 
 const manifest = JSON.parse(readFileSync("dist/manifest.json", "utf8"));
 const entry = manifest.components["promo-modal"];
 const code = readFileSync(`dist/${entry.web.file}`, "utf8");
 const ssrCode = readFileSync(`dist/${entry.ssr.file}`, "utf8");
 
-// Cara loader memuat bundle dari URL: evaluasi CJS mandiri (tidak butuh modul dari host).
-// Bundle `web` untuk browser (render), bundle `ssr` untuk server (renderHTML).
+// Cara loader memuat bundle dari URL. Bundle `web` untuk browser (render, me-require runtime
+// bersama), bundle `ssr` untuk server (renderHTML, mandiri).
 function load() {
-  const module = { exports: {} as any };
-  new Function("module", "exports", code)(module, module.exports);
-  const server = { exports: {} as any };
-  new Function("module", "exports", ssrCode)(server, server.exports);
-  module.exports = { ...module.exports, renderHTML: server.exports.renderHTML };
-  return module.exports as {
+  return { ...loadWeb(entry.web), renderHTML: evaluate(ssrCode).renderHTML } as {
     protocol: number;
     renderHTML(p: object): string;
     render(el: HTMLElement, p: object): { update(p: object): void; unmount(): void };
@@ -26,9 +22,12 @@ function load() {
 
 const props = { title: "Kelas IELTS <Intensif>", price: 150000, seats: 3 };
 
-test("bundle web & ssr mandiri: tidak me-require modul apa pun", () => {
-  assert.doesNotMatch(code, /\brequire\(/);
+test("bundle web hanya me-require runtime xp, bundle ssr mandiri", () => {
+  const required = [...code.matchAll(/\brequire\("([^"]+)"\)/g)].map((m) => m[1]);
+  assert.ok(required.length > 0);
+  assert.ok(required.every((id) => id.startsWith("@xp/runtime")), required.join(", "));
   assert.doesNotMatch(ssrCode, /\brequire\(/);
+  assert.ok(code.length < 4000, `bundle komponen ${code.length} byte, runtime tidak ikut`);
   assert.equal(load().protocol, 1);
 });
 

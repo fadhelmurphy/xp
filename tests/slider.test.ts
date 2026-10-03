@@ -7,6 +7,7 @@ import { JSDOM } from "jsdom";
 import { getQuickJS } from "quickjs-emscripten";
 import type { Batch } from "../runtime/protocol";
 import { NativeTree } from "../sdk-reference/tree";
+import { evaluate, loadWeb } from "./load-web";
 
 const manifest = JSON.parse(readFileSync("dist/manifest.json", "utf8"));
 const entry = manifest.components["promo-slider"];
@@ -68,13 +69,8 @@ test("native (QuickJS): pindah slide lewat tombol dan titik, berputar di ujung",
 });
 
 test("web (DOM): klik tombol dan titik mengganti slide", async () => {
-  const code = readFileSync(`dist/${entry.web.file}`, "utf8");
-  const mod = { exports: {} as any };
-  new Function("module", "exports", code)(mod, mod.exports);
-
-  const server = { exports: {} as any };
-  new Function("module", "exports", readFileSync(`dist/${entry.ssr.file}`, "utf8"))(server, server.exports);
-  const html = server.exports.renderHTML({});
+  const mod = { exports: loadWeb(entry.web) };
+  const html = evaluate(readFileSync(`dist/${entry.ssr.file}`, "utf8")).renderHTML({});
   assert.match(html, /IELTS Intensif/);
   assert.match(html, /1 \/ 3/);
 

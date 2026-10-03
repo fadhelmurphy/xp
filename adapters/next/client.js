@@ -57,36 +57,65 @@ export async function sha256(text) {
 
 // --- muat bundle ---
 
-const bundles = new Map(); // src → Promise<exports>
+const cache = new Map(); // src → Promise<exports>
 
-/** Unduh bundle web, cocokkan dengan sha256 dari manifest, lalu jalankan. Hasilnya di-cache per URL. */
-export function loadBundle(src, expectedHash) {
-  if (!bundles.has(src)) {
-    bundles.set(
+async function fetchVerified(src, expectedHash) {
+  const res = await fetch(src);
+  if (!res.ok) throw new Error(`${src} → HTTP ${res.status}`);
+  const code = await res.text();
+  if (expectedHash && (await sha256(code)) !== expectedHash) {
+    throw new Error(`${src}: hash tidak cocok dengan manifest, bundle ditolak`);
+  }
+  return code;
+}
+
+function once(src, load) {
+  if (!cache.has(src)) {
+    cache.set(
       src,
-      (async () => {
-        const res = await fetch(src);
-        if (!res.ok) throw new Error(`${src} → HTTP ${res.status}`);
-        const code = await res.text();
-        if (expectedHash && (await sha256(code)) !== expectedHash) {
-          throw new Error(`${src}: hash tidak cocok dengan manifest, bundle ditolak`);
-        }
-        const module = { exports: {} };
-        new Function("module", "exports", code)(module, module.exports);
-        return module.exports;
-      })().catch((e) => {
-        bundles.delete(src); // coba lagi nanti
+      load().catch((e) => {
+        cache.delete(src); // coba lagi nanti
         throw e;
       }),
     );
   }
-  return bundles.get(src);
+  return cache.get(src);
+}
+
+function evaluate(code, require) {
+  const module = { exports: {} };
+  new Function("module", "exports", "require", code)(module, module.exports, require);
+  return module.exports;
+}
+
+/**
+ * Unduh bundle web, cocokkan dengan sha256 dari manifest, lalu jalankan. Hasilnya di-cache per URL.
+ * `runtime` ({ src, sha256 }): runtime xp bersama yang di-require bundle komponen xp. Dimuat sekali
+ * untuk semua komponen dari remote yang sama.
+ */
+export function loadBundle(src, expectedHash, runtime) {
+  return once(src, async () => {
+    const [code, modules] = await Promise.all([
+      fetchVerified(src, expectedHash),
+      runtime ? once(runtime.src, async () => evaluate(await fetchVerified(runtime.src, runtime.sha256))) : null,
+    ]);
+    return evaluate(code, (id) => {
+      const mod = modules?.modules?.[id];
+      if (!mod) throw new Error(`${src} membutuhkan ${id}, tapi runtime xp tidak dimuat`);
+      return mod;
+    });
+  });
+}
+
+/** Lokasi runtime bersama untuk satu entri manifest, atau null (bundle mandiri / framework lain). */
+export function runtimeOf(base, web) {
+  return web.runtime ? { src: `${base}/${web.runtime.file}`, sha256: web.runtime.sha256 } : null;
 }
 
 // --- xp dev ---
 
 /**
- * Ikuti build baru dari `xp dev`. `onUpdate({ src, sha256 })` dipanggil setiap komponen `name`
+ * Ikuti build baru dari `xp dev`. `onUpdate({ src, sha256, runtime })` dipanggil setiap komponen `name`
  * di-build ulang. Mengembalikan fungsi untuk berhenti.
  */
 export function watchDev(base, name, onUpdate) {
@@ -98,7 +127,7 @@ export function watchDev(base, name, onUpdate) {
     try {
       const manifest = await (await fetch(`${base}/manifest.json`, { cache: "no-store" })).json();
       const entry = manifest.components?.[name];
-      if (entry) await onUpdate({ src: `${base}/${entry.web.file}`, sha256: entry.web.sha256 });
+      if (entry) await onUpdate({ src: `${base}/${entry.web.file}`, sha256: entry.web.sha256, runtime: runtimeOf(base, entry.web) });
     } catch (err) {
       console.error("[xp] reload gagal", err);
     }
@@ -108,7 +137,7 @@ export function watchDev(base, name, onUpdate) {
 
 /** Ganti instance yang sedang tampil dengan bundle baru. State useState dibawa (komponen xp). */
 export async function swapInstance(el, instance, next, props) {
-  const mod = await loadBundle(next.src, next.sha256);
+  const mod = await loadBundle(next.src, next.sha256, next.runtime);
   const restore = instance?.snapshot?.() ?? null;
   instance?.unmount();
   el.textContent = "";

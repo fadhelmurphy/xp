@@ -2,6 +2,7 @@
 // lalu serahkan ke island client untuk hydrate & interaksi.
 import { createElement } from "react";
 import { XPIsland } from "./island.js";
+import { runtimeOf } from "./client.js";
 import { verifyManifest } from "./verify.js";
 
 const modules = new Map(); // src (ber-hash) → exports; aman di-cache selamanya
@@ -78,7 +79,8 @@ export function remote(base, name, { revalidate = 30, publicKey, dev = false } =
     const html = await mod.renderHTML(props); // Vue: Promise, lainnya: string
     // live: hanya kalau app dijalankan dengan `next dev` dan remote-nya `xp dev`.
     const live = dev && manifest.dev === true;
-    return createElement(XPIsland, { src, sha256: entry.web.sha256, html, props, base, name, live });
+    const runtime = runtimeOf(base, entry.web);
+    return createElement(XPIsland, { src, sha256: entry.web.sha256, runtime, html, props, base, name, live });
   }
   XPRemote.displayName = `XP(${name})`;
   return XPRemote;

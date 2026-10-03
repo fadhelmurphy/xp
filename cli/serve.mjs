@@ -73,9 +73,14 @@ async function load() {
   const entry = manifest.components[NAME];
   if (!entry) throw new Error("komponen " + NAME + " tidak ada di manifest");
   if (entry.web.file === file) return;
-  const code = await (await fetch("/" + entry.web.file)).text();
-  const module = { exports: {} };
-  new Function("module", "exports", code)(module, module.exports);
+  const evaluate = (code, require) => {
+    const module = { exports: {} };
+    new Function("module", "exports", "require", code)(module, module.exports, require);
+    return module.exports;
+  };
+  // Komponen xp me-require runtime bersama (xp-runtime.<hash>.js).
+  const runtime = entry.web.runtime ? evaluate(await (await fetch("/" + entry.web.runtime.file)).text()).modules : {};
+  const module = { exports: evaluate(await (await fetch("/" + entry.web.file)).text(), (id) => runtime[id]) };
   const restore = handle && handle.snapshot ? handle.snapshot() : null;
   if (handle) handle.unmount();
   app.textContent = "";

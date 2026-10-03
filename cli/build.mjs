@@ -42,10 +42,40 @@ const xpCommon = {
   logLevel: "silent",
 };
 
+// Runtime xp untuk browser, dipakai bersama oleh semua komponen xp di satu remote.
+// Bundle web komponen me-require modul-modul ini; loader menyediakannya dari file runtime.
+export const RUNTIME_MODULES = ["@xp/runtime", "@xp/runtime/jsx-runtime", "@xp/runtime/hosts/dom"];
+
+const runtimeBuild = () => ({
+  ...xpCommon,
+  format: "cjs",
+  platform: "neutral",
+  stdin: {
+    contents:
+      RUNTIME_MODULES.map((m, i) => `import * as m${i} from "${m}";`).join("\n") +
+      `\nexport const protocol = ${PROTOCOL_VERSION};` +
+      `\nexport const modules = { ${RUNTIME_MODULES.map((m, i) => `"${m}": m${i}`).join(", ")} };`,
+    resolveDir: RUNTIME,
+    loader: "js",
+  },
+});
+
+const externalRuntime = {
+  name: "xp-external-runtime",
+  setup(b) {
+    b.onResolve({ filter: /^@xp\/runtime(\/.*)?$/ }, (args) => {
+      if (RUNTIME_MODULES.includes(args.path)) return { path: args.path, external: true };
+      return { errors: [{ text: `${args.path} tidak bisa dipakai di bundle web` }] };
+    });
+  },
+};
+
 const xpBuilds = {
-  // CJS mandiri untuk browser: render/hydrate ke DOM. Runtime xp ikut di dalamnya.
+  // CJS untuk browser: hanya kode komponen. Runtime xp di-require dari file runtime bersama.
   web: (entry) => ({
     ...xpCommon,
+    alias: {},
+    plugins: [externalRuntime],
     format: "cjs",
     platform: "neutral",
     stdin: {
@@ -169,6 +199,14 @@ export async function runBuild({ srcDir, outDir, jobs, clean = false, projectDir
   const xpReader = xpFiles.length ? createPropsReader(xpFiles, RUNTIME) : null;
   const reactReader = reactFiles.length ? createPropsReader(reactFiles, RUNTIME, { jsxImportSource: "react" }) : null;
 
+  // Runtime bersama dibuat sekali per build kalau ada komponen xp untuk web.
+  let runtime = null;
+  if (jobs.some((j) => j.kind === "xp" && j.outputs.includes("web"))) {
+    const code = (await build(runtimeBuild())).outputFiles[0].text;
+    const hash = sha(code);
+    runtime = { file: `xp-runtime.${hash.slice(0, 10)}.js`, sha256: hash, bytes: code.length, code };
+  }
+
   const results = [];
   for (const job of jobs) {
     const { name, file, kind, outputs } = job;
@@ -203,6 +241,7 @@ export async function runBuild({ srcDir, outDir, jobs, clean = false, projectDir
         const fileName = `${name}.${out}.${hash.slice(0, 10)}.js`;
         written.push([fileName, code]);
         record[out] = { file: fileName, bytes: code.length, sha256: hash };
+        if (kind === "xp" && out === "web") record.web.runtime = { file: runtime.file, sha256: runtime.sha256, bytes: runtime.bytes };
         for (const w of result.warnings ?? []) warnings.push(w.text);
         if (out === "native") {
           record.primitives = await primitivesUsed(result.metafile);
@@ -224,6 +263,14 @@ export async function runBuild({ srcDir, outDir, jobs, clean = false, projectDir
     } catch (e) {
       results.push({ name, kind, ok: false, error: formatError(e) });
     }
+  }
+
+  // File runtime: tulis yang dipakai, hapus yang tidak dipakai komponen mana pun lagi.
+  // Komponen dari build lama tetap memakai runtime versinya sendiri sampai di-build ulang.
+  const usedRuntimes = new Set(Object.values(manifest.components).map((c) => c.web?.runtime?.file).filter(Boolean));
+  if (runtime && usedRuntimes.has(runtime.file)) await writeFile(path.join(outDir, runtime.file), runtime.code);
+  for (const f of await readdir(outDir)) {
+    if (/^xp-runtime\.[0-9a-f]+\.js$/.test(f) && !usedRuntimes.has(f)) await rm(path.join(outDir, f), { force: true });
   }
 
   manifest.builtAt = new Date().toISOString();

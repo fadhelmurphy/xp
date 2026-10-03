@@ -154,6 +154,8 @@ async function cmdBuild(opts) {
       console.log(`✗ ${r.name.padEnd(16)} ${r.kind.padEnd(7)}\n    ${r.error}`);
     }
   }
+  const runtime = results.find((r) => r.ok && r.record.web?.runtime)?.record.web.runtime;
+  if (runtime) console.log(`  runtime xp bersama: ${runtime.file} (${kb(runtime.bytes)}, sekali per halaman)`);
   const failed = results.filter((r) => !r.ok).length;
   const signed = signingKey ? ` · ditandatangani (kunci publik ${publicKeyOf(signingKey).slice(-12)})` : "";
   const done = `${results.length - failed}/${results.length} berhasil · manifest: ${rel}/manifest.json${signed}`;

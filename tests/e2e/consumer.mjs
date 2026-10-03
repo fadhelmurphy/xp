@@ -71,10 +71,13 @@ step("slider: tombol ‹ ›, titik indikator, dan putaran jalan");
 const box = await page.getByTestId("slide").boundingBox();
 await page.mouse.move(box.x + box.width * 0.8, box.y + box.height / 2);
 await page.mouse.down();
-await page.mouse.move(box.x + box.width * 0.2, box.y + box.height / 2, { steps: 8 });
+await page.mouse.move(box.x + box.width * 0.6, box.y + box.height / 2, { steps: 4 });
+const during = await page.getByTestId("slide").evaluate((el) => el.style.transform);
+assert.match(during, /translate\(-\d+(\.\d+)?px, 0px\)/, "slide ikut pointer selama digeser (dragAxis)");
+await page.mouse.move(box.x + box.width * 0.2, box.y + box.height / 2, { steps: 4 });
 await page.mouse.up();
 await page.waitForFunction(() => document.querySelector('[data-testid="slide-title"]').textContent === "Speaking Club");
-step("slider: geser ke kiri → slide berikutnya (onSwipe)");
+step("slider: ikut pointer selama digeser, lalu pindah ke slide berikutnya (dragAxis + onSwipe)");
 
 // Komponen web dari framework lain (React, Vue, Svelte), di halaman yang sama.
 assert.match(html, /Suka kelas ini\?/, "React di-SSR");
@@ -101,7 +104,9 @@ step("Svelte (faq-list): SSR + hydrate, buka item 2 → item 1 menutup dengan tr
 const loaded = await page.evaluate(() => performance.getEntriesByType("resource").map((e) => e.name).filter((n) => n.includes(":4400/")));
 assert.ok(!loaded.some((n) => n.includes(".ssr.")), "browser tidak boleh mengunduh bundle SSR");
 assert.ok(!loaded.some((n) => /react|vue|svelte/i.test(n) && !n.includes(".web.")), "tidak ada runtime framework terpisah");
-step(`browser hanya mengunduh bundle web (${loaded.filter((n) => n.endsWith(".js")).length} file), tanpa bundle SSR`);
+const runtimes = loaded.filter((n) => /\/xp-runtime\.[0-9a-f]+\.js/.test(n));
+assert.equal(runtimes.length, 1, "runtime xp dimuat sekali untuk semua komponen xp");
+step(`browser hanya mengunduh bundle web (${loaded.filter((n) => n.endsWith(".js")).length} file, runtime xp sekali), tanpa bundle SSR`);
 
 // 3. Tim komponen deploy perubahan → app konsumen ikut berubah TANPA rebuild.
 const src = "examples/promo-modal.tsx";

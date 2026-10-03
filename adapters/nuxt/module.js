@@ -33,7 +33,7 @@ export default defineComponent({
     onMounted(async () => {
       if (!result) return;
       try {
-        const mod = await loadClient(result.src, result.sha256);
+        const mod = await loadClient(result.src, result.sha256, result.runtime);
         if (!el.value) return;
         instance = mod.render(el.value, JSON.parse(lastProps));
         el.value.dataset.xpReady = "true";

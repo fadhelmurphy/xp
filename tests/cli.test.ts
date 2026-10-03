@@ -41,7 +41,7 @@ test("build parsial mempertahankan komponen lain dan membersihkan file lama", ()
   assert.equal(r.code, 0, r.out);
   const m = JSON.parse(readFileSync(path.join(out, "manifest.json"), "utf8"));
   assert.deepEqual(Object.keys(m.components), ["like-button", "promo-modal", "promo-slider"]);
-  const referenced = new Set(Object.values<any>(m.components).flatMap((c) => [c.types, c.web?.file, c.ssr?.file, c.native?.file]).filter(Boolean));
+  const referenced = new Set(Object.values<any>(m.components).flatMap((c) => [c.types, c.web?.file, c.web?.runtime?.file, c.ssr?.file, c.native?.file]).filter(Boolean));
   const files = readdirSync(out).filter((f) => f !== "manifest.json");
   assert.deepEqual(files.sort(), [...referenced].sort(), "tidak ada file yatim");
 });

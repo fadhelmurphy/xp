@@ -32,10 +32,10 @@ Simpan di `src/counter.tsx`, lalu `npx github:fadhelmurphy/xp build`. Tidak perl
 
 | Primitive | Props | Web | Android | iOS |
 |---|---|---|---|---|
-| `View` | `style`, `onSwipe`, `children` | `div` | `Column` / `Row` | `VStack` / `HStack` |
+| `View` | `style`, `onSwipe`, `dragAxis`, `children` | `div` | `Column` / `Row` | `VStack` / `HStack` |
 | `Text` | `style`, `numberOfLines`, `children` | `span` | `Text` | `Text` |
 | `Image` | `src`, `alt`, `style` | `img` | `AsyncImage` | `AsyncImage` |
-| `Pressable` | `onPress`, `onSwipe`, `disabled`, `style`, `children` | `div` + click | `clickable` | `Button` |
+| `Pressable` | `onPress`, `onSwipe`, `dragAxis`, `disabled`, `style`, `children` | `div` + click | `clickable` | `Button` |
 | `ScrollView` | `horizontal`, `style`, `children` | `div` + overflow | `verticalScroll` / `horizontalScroll` | `ScrollView` |
 | `TextInput` | `value`, `placeholder`, `onChangeText`, `secure`, `style` | `input` | `BasicTextField` | `TextField` / `SecureField` |
 | `Modal` | `visible`, `onRequestClose`, `style`, `children` | overlay | `Dialog` | `.sheet` |
@@ -157,7 +157,19 @@ Interval yang tertinggal (misalnya saat app di background) tidak dikejar; ia lan
 </View>
 ```
 
-Di web, elemen dengan `onSwipe` tetap bisa di-scroll vertikal di HP (`touch-action: pan-y`). Handler dipanggil setelah jari diangkat. Animasi yang mengikuti jari selama digeser belum ada.
+Handler dipanggil setelah jari diangkat. Di web, elemen dengan `onSwipe` tetap bisa di-scroll vertikal di HP (`touch-action: pan-y`).
+
+### Mengikuti jari
+
+Dengan `dragAxis="x"` atau `dragAxis="y"`, elemen bergeser mengikuti jari di sumbu itu selama digeser, lalu kembali ke tempatnya (200 ms) saat dilepas. Biasanya dipakai bersama `onSwipe` dan `entering`, seperti di slider:
+
+```tsx
+<View dragAxis="x" onSwipe={(dir) => (dir === "left" ? next() : prev())}>
+  <View key={index} entering={{ opacity: 0, translateX: 28 * direction, duration: 320 }}>…</View>
+</View>
+```
+
+Gerakannya dijalankan langsung oleh platform (transform di web, `graphicsLayer` di Android, `offset` di iOS), tanpa menunggu JS. Komponen tidak menerima posisi jari selama digeser; yang sampai ke JS hanya arah swipe setelah dilepas.
 
 ## List dan key
 

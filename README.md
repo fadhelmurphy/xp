@@ -94,6 +94,7 @@ manifest.json              daftar komponen, file terbaru, dan hash-nya
 manifest.sig               tanda tangan manifest (kalau build dengan --sign)
 <nama>.<hash>.d.ts         tipe props, dipakai adapter untuk autocomplete
 <nama>.web.<hash>.js       bundle browser
+xp-runtime.<hash>.js       runtime xp untuk browser, dipakai bersama semua komponen xp
 <nama>.ssr.<hash>.js       bundle server untuk SSR
 <nama>.native.<hash>.js    bundle untuk QuickJS / JavaScriptCore (komponen xp saja)
 ```
@@ -102,12 +103,15 @@ Ukuran contoh yang ada di repo:
 
 | Komponen | web | ssr | native |
 |---|---|---|---|
-| `promo-modal` (xp) | 13 kB (5 kB gzip) | 10 kB | 8 kB |
+| `promo-modal` (xp) | 2,4 kB + runtime 13 kB | 10 kB | 8 kB |
+| `promo-slider` (xp) | 2,7 kB + runtime yang sama | 10 kB | 9 kB |
 | `like-button` (React) | 220 kB | 219 kB | - |
 | `rating-stars` (Vue) | 70 kB | 82 kB | - |
 | `faq-list` (Svelte) | 64 kB | 30 kB | - |
 
-Browser hanya mengunduh bundle `web`; bundle `ssr` dipakai server. Setiap bundle membawa runtime-nya sendiri (sekitar 11 kB untuk komponen xp, jauh lebih besar untuk React/Vue/Svelte). Untuk satu dua komponen tidak masalah, tapi kalau satu halaman memuat banyak komponen, ukurannya ikut berlipat.
+Browser hanya mengunduh bundle `web`; bundle `ssr` dipakai server. Komponen xp memakai satu runtime bersama (`xp-runtime.<hash>.js`, 13 kB, 5,5 kB gzip) yang diunduh sekali per halaman, jadi setiap komponen xp tambahan hanya menambah 2-3 kB. Komponen React, Vue, dan Svelte membawa runtime framework-nya sendiri di setiap bundle.
+
+Kalau memuat bundle web sendiri tanpa adapter: jalankan dulu `xp-runtime.<hash>.js` (dari `components[nama].web.runtime`), lalu jalankan bundle komponen dengan `require(id)` yang mengembalikan `runtime.modules[id]`. Contohnya ada di `adapters/next/client.js`.
 
 ### Development repo ini
 
@@ -209,11 +213,11 @@ Animasi masuk untuk elemen yang muncul setelah mount. Biasanya dipakai bersama `
 
 `View` dan `Pressable` menerima `onSwipe`. Handler dipanggil dengan arah geserannya (`"left"`, `"right"`, `"up"`, atau `"down"`) kalau jari, atau mouse di web, bergeser minimal 40 px. Tap biasa tetap sampai ke `onPress`.
 
-```tsx
-<View onSwipe={(dir) => dir === "left" && next()}>…</View>
-```
+Tambahkan `dragAxis="x"` (atau `"y"`) supaya elemen ikut jari selama digeser, lalu kembali ke tempatnya saat dilepas. Gerakannya dijalankan langsung oleh platform, tanpa bolak-balik ke JS, jadi tetap mulus.
 
-Animasi yang mengikuti jari selama digeser belum ada. Elemennya baru bereaksi setelah jari diangkat.
+```tsx
+<View dragAxis="x" onSwipe={(dir) => dir === "left" && next()}>…</View>
+```
 
 ## Komponen React, Vue, Svelte
 
@@ -301,7 +305,7 @@ export default function PromoSlider({ slides = DEFAULT_SLIDES }: Props) {
 <PromoSlider slides={[{ title: "Promo Oktober", subtitle: "Diskon 20%", color: "#CF222E" }]} />
 ```
 
-Slide bisa digeser ke kiri atau kanan (`onSwipe`). `autoplay` memakai `setTimeout`, dan hitungannya diulang setiap slide berganti.
+Slide ikut jari saat digeser dan pindah kalau digeser cukup jauh (`dragAxis` + `onSwipe`). `autoplay` memakai `setTimeout`, dan hitungannya diulang setiap slide berganti.
 
 ## Next.js
 
@@ -510,7 +514,7 @@ Yang sudah dites:
 
 - Runtime, protokol, host DOM/SSR/native, CLI, dan manifest. Bundle native dijalankan di QuickJS dan hasil tree-nya dicek di unit test.
 - Target web untuk React, Vue, dan Svelte (SSR, hydrate, scoped CSS) di jsdom dan Chromium.
-- Adapter Next.js dan Nuxt, end-to-end di Chromium, termasuk hydrate yang memakai elemen dari server dan swipe dengan mouse.
+- Adapter Next.js dan Nuxt, end-to-end di Chromium, termasuk hydrate yang memakai elemen dari server, slide yang ikut mouse saat digeser, dan runtime xp yang diunduh sekali untuk semua komponen.
 - CLI dari proyek terpisah, lewat `npm pack` dan langsung lewat `npx github:fadhelmurphy/xp`, termasuk menu interaktif.
 - `setTimeout`/`setInterval` dan snapshot state di QuickJS dan JavaScriptCore (lewat Bun).
 - `xp dev` di Chromium: file diubah, pratinjau memuat versi baru, state tetap. Hal yang sama dengan `next dev` dan `nuxt dev`.
@@ -519,9 +523,9 @@ Yang sudah dites:
 
 Yang belum:
 
-- SDK Android: bagian tree, style, JSON, arah swipe, event `xp dev`, dan verifikasi tanda tangan sudah dites dengan kotlinc. Bagian Compose (termasuk timer, swipe, dan reload `live`) belum pernah dikompilasi atau dijalankan di emulator.
+- SDK Android: bagian tree, style, JSON, arah swipe, event `xp dev`, dan verifikasi tanda tangan sudah dites dengan kotlinc. Bagian Compose (termasuk timer, swipe, drag, dan reload `live`) belum pernah dikompilasi atau dijalankan di emulator.
 - SDK iOS: kode Swift belum dikompilasi. Jalankan `swift test` di Mac.
 - Belum ada GIF demo untuk Android dan iOS.
 - Layout di mobile belum memakai Yoga, jadi hasilnya bisa sedikit berbeda dari web.
-- Belum ada animasi yang mengikuti jari selama digeser.
-- Runtime xp ikut di setiap bundle web (sekitar 11 kB per komponen). Belum ada runtime bersama untuk banyak komponen di satu halaman.
+- `dragAxis` di Android (Compose) dan iOS (SwiftUI) belum pernah dijalankan; logika sumbunya saja yang dites.
+- Runtime bersama hanya dipakai bersama oleh komponen dari remote yang sama. Dua remote berbeda memuat runtime masing-masing.
