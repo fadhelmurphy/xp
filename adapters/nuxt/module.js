@@ -6,10 +6,10 @@ import { syncRemotes, xp } from "@xp/vite";
 
 /** Wrapper Vue untuk satu komponen remote. Props diteruskan apa adanya (harus bisa di-JSON-kan). */
 const vue = {
-  code: ({ base, name, revalidate, publicKey }) => `
+  code: ({ base, name, revalidate, publicKey, dev }) => `
 import { defineComponent, h, onBeforeUnmount, onMounted, onUpdated, ref } from "vue";
 import { useAsyncData } from "#app";
-import { loadClient, plainProps, renderRemote } from "@xp/vite/runtime";
+import { loadClient, plainProps, renderRemote, swapInstance, watchDev } from "@xp/vite/runtime";
 
 const BASE = ${JSON.stringify(base)};
 const NAME = ${JSON.stringify(name)};
@@ -24,6 +24,7 @@ export default defineComponent({
     let result = null; // { src, html } dari server
     let instance = null;
     let lastProps = initial;
+    let stopDev = null;
 
     // PENTING: semua lifecycle hook didaftarkan SEBELUM await. Di setup async Vue,
     // hook yang didaftarkan setelah await tidak terhubung ke komponen (gagal diam-diam).
@@ -32,10 +33,20 @@ export default defineComponent({
     onMounted(async () => {
       if (!result) return;
       try {
-        const mod = await loadClient(result.src);
+        const mod = await loadClient(result.src, result.sha256);
         if (!el.value) return;
         instance = mod.render(el.value, JSON.parse(lastProps));
         el.value.dataset.xpReady = "true";
+        // xp dev: build baru → ganti bundle di tempat, state komponen dibawa.
+        if (result.live) {
+          let current = result.src;
+          stopDev = watchDev(BASE, NAME, async (next) => {
+            if (!el.value || !instance || next.src === current) return;
+            instance = await swapInstance(el.value, instance, next, JSON.parse(lastProps));
+            current = next.src;
+            el.value.dataset.xpVersion = next.src;
+          });
+        }
       } catch (e) {
         console.error("[xp]", e); // gagal: HTML SSR tetap tampil
       }
@@ -47,11 +58,14 @@ export default defineComponent({
       lastProps = next;
       instance?.update(JSON.parse(next));
     });
-    onBeforeUnmount(() => instance?.unmount());
+    onBeforeUnmount(() => {
+      stopDev?.();
+      instance?.unmount();
+    });
 
     // SSR: render HTML di server. Hasilnya ikut payload Nuxt, jadi client tidak render ulang.
     const { data, error } = await useAsyncData("xp:" + NAME + ":" + initial, () =>
-      renderRemote(BASE, NAME, JSON.parse(initial), ${revalidate}, ${JSON.stringify(publicKey ?? null)}),
+      renderRemote(BASE, NAME, JSON.parse(initial), ${revalidate}, ${JSON.stringify(publicKey ?? null)}, ${Boolean(dev)}),
     );
     if (error.value) console.error("[xp]", error.value);
     result = data.value;

@@ -81,12 +81,15 @@ test("arah swipe: sumbu dominan, minimal 40", () => {
   assert.equal(swipeDirection(30, 30), null);
 });
 
-function loadWeb(file: string, dom: JSDOM) {
+function loadWeb(entry: { web: { file: string }; ssr: { file: string } }, dom: JSDOM) {
   const g = globalThis as any;
   Object.assign(g, { window: dom.window, document: dom.window.document, Node: dom.window.Node });
-  const module = { exports: {} as any };
-  new Function("module", "exports", readFileSync(`dist/${file}`, "utf8"))(module, module.exports);
-  return module.exports as {
+  const evaluate = (file: string) => {
+    const module = { exports: {} as any };
+    new Function("module", "exports", readFileSync(`dist/${file}`, "utf8"))(module, module.exports);
+    return module.exports;
+  };
+  return { ...evaluate(entry.web.file), renderHTML: evaluate(entry.ssr.file).renderHTML } as {
     renderHTML(p: object): string;
     render(el: HTMLElement, p: object): { update(p: object): void; unmount(): void };
   };
@@ -94,7 +97,7 @@ function loadWeb(file: string, dom: JSDOM) {
 
 test("web: hydration memakai elemen hasil SSR, tidak membuat ulang", async () => {
   const dom = new JSDOM(`<div id="app"></div>`);
-  const bundle = loadWeb(modal.web.file, dom);
+  const bundle = loadWeb(modal, dom);
   const props = { title: "Kelas IELTS", price: 150000, seats: 3 };
   const app = dom.window.document.getElementById("app")!;
   app.innerHTML = bundle.renderHTML(props);
@@ -122,7 +125,7 @@ test("web: hydration memakai elemen hasil SSR, tidak membuat ulang", async () =>
 
 test("web: HTML SSR yang tidak cocok diganti render client", () => {
   const dom = new JSDOM(`<div id="app"></div>`);
-  const bundle = loadWeb(modal.web.file, dom);
+  const bundle = loadWeb(modal, dom);
   const app = dom.window.document.getElementById("app")!;
   app.innerHTML = bundle.renderHTML({ title: "Lama", price: 1, seats: 1 }) + "<p>sisa</p>";
   bundle.render(app, { title: "Baru", price: 150000, seats: 3 });
@@ -132,7 +135,7 @@ test("web: HTML SSR yang tidak cocok diganti render client", () => {
 
 test("web: geser slide dengan pointer", async () => {
   const dom = new JSDOM(`<div id="app"></div>`);
-  const bundle = loadWeb(slider.web.file, dom);
+  const bundle = loadWeb(slider, dom);
   const app = dom.window.document.getElementById("app")!;
   bundle.render(app, {});
   const slide = app.querySelector('[data-testid="slide"]') as HTMLElement;

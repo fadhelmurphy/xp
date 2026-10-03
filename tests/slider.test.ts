@@ -72,7 +72,9 @@ test("web (DOM): klik tombol dan titik mengganti slide", async () => {
   const mod = { exports: {} as any };
   new Function("module", "exports", code)(mod, mod.exports);
 
-  const html = mod.exports.renderHTML({});
+  const server = { exports: {} as any };
+  new Function("module", "exports", readFileSync(`dist/${entry.ssr.file}`, "utf8"))(server, server.exports);
+  const html = server.exports.renderHTML({});
   assert.match(html, /IELTS Intensif/);
   assert.match(html, /1 \/ 3/);
 

@@ -1,5 +1,5 @@
 // Plugin Vite inti untuk xp. Framework (Nuxt, SvelteKit, ...) cukup menyediakan:
-//   framework.code({ base, name, revalidate, publicKey }) → kode modul pembungkus komponen
+//   framework.code({ base, name, revalidate, publicKey, dev }) → kode modul pembungkus komponen
 //   framework.dts({ spec, props })             → deklarasi TypeScript untuk "xp:<remote>/<nama>"
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
@@ -66,9 +66,13 @@ export function xp({ remotes, revalidate = 30, dir = ".xp", root, framework, syn
   let entries = synced?.entries ?? null;
   const PREFIX = "\0xp:";
 
+  let dev = false;
   return {
     name: "xp",
     enforce: "pre",
+    configResolved(config) {
+      dev = config.command === "serve";
+    },
     async buildStart() {
       if (!entries) entries = (await syncRemotes({ remotes, root: root ?? process.cwd(), dir, framework })).entries;
     },
@@ -84,7 +88,7 @@ export function xp({ remotes, revalidate = 30, dir = ".xp", root, framework, syn
       const spec = "xp:" + id.slice(PREFIX.length);
       const entry = entries?.get(spec);
       if (!entry) this.error(`[xp] "${spec}" tidak ada di manifest remote`);
-      return framework.code({ base: entry.base, name: entry.name, revalidate, publicKey });
+      return framework.code({ base: entry.base, name: entry.name, revalidate, publicKey, dev });
     },
   };
 }

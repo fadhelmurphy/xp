@@ -5,12 +5,18 @@ import { test } from "node:test";
 import { JSDOM } from "jsdom";
 
 const manifest = JSON.parse(readFileSync("dist/manifest.json", "utf8"));
-const code = readFileSync(`dist/${manifest.components["promo-modal"].web.file}`, "utf8");
+const entry = manifest.components["promo-modal"];
+const code = readFileSync(`dist/${entry.web.file}`, "utf8");
+const ssrCode = readFileSync(`dist/${entry.ssr.file}`, "utf8");
 
 // Cara loader memuat bundle dari URL: evaluasi CJS mandiri (tidak butuh modul dari host).
+// Bundle `web` untuk browser (render), bundle `ssr` untuk server (renderHTML).
 function load() {
   const module = { exports: {} as any };
   new Function("module", "exports", code)(module, module.exports);
+  const server = { exports: {} as any };
+  new Function("module", "exports", ssrCode)(server, server.exports);
+  module.exports = { ...module.exports, renderHTML: server.exports.renderHTML };
   return module.exports as {
     protocol: number;
     renderHTML(p: object): string;
@@ -20,9 +26,15 @@ function load() {
 
 const props = { title: "Kelas IELTS <Intensif>", price: 150000, seats: 3 };
 
-test("bundle web mandiri: tidak me-require modul apa pun", () => {
+test("bundle web & ssr mandiri: tidak me-require modul apa pun", () => {
   assert.doesNotMatch(code, /\brequire\(/);
+  assert.doesNotMatch(ssrCode, /\brequire\(/);
   assert.equal(load().protocol, 1);
+});
+
+test("bundle browser tanpa kode SSR, bundle server tanpa kode DOM", () => {
+  assert.doesNotMatch(code, /renderHTML/);
+  assert.doesNotMatch(ssrCode, /addEventListener|createElement\(/);
 });
 
 test("SSR: HTML lengkap, teks di-escape, modal tersembunyi", () => {

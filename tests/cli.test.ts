@@ -25,9 +25,9 @@ test("rencana target", async () => {
   const all = await discover(path.resolve("examples"));
   const outputs = (t: string) => Object.fromEntries(plan(all, t).jobs.map((j: any) => [j.name, j.outputs.join("+")]));
   assert.deepEqual(outputs("auto"), {
-    "faq-list": "web+ssr", "like-button": "web+ssr", "promo-modal": "web+native", "promo-slider": "web+native", "rating-stars": "web+ssr",
+    "faq-list": "web+ssr", "like-button": "web+ssr", "promo-modal": "web+ssr+native", "promo-slider": "web+ssr+native", "rating-stars": "web+ssr",
   });
-  assert.equal(outputs("web")["promo-modal"], "web");
+  assert.equal(outputs("web")["promo-modal"], "web+ssr");
   const cp = plan(all, "crossplatform");
   assert.deepEqual(cp.jobs.map((j: any) => j.name), ["promo-modal", "promo-slider"]);
   assert.equal(cp.skipped.length, 3);

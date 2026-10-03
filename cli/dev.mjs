@@ -24,7 +24,7 @@ export async function dev({ srcDir, outDir, port, target = "auto", signingKey = 
     const selected = names ? jobs.filter((j) => names.includes(j.name)) : jobs;
     if (!selected.length) return null;
     const started = Date.now();
-    const { results } = await runBuild({ srcDir, outDir, jobs: selected, signingKey });
+    const { results } = await runBuild({ srcDir, outDir, jobs: selected, signingKey, dev: true });
     for (const r of results) {
       log(r.ok ? `✓ ${r.name}` : `✗ ${r.name}\n    ${r.error}`);
       if (r.ok) for (const w of r.warnings) log(`  ⚠ ${w}`);

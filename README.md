@@ -94,7 +94,7 @@ manifest.json              daftar komponen, file terbaru, dan hash-nya
 manifest.sig               tanda tangan manifest (kalau build dengan --sign)
 <nama>.<hash>.d.ts         tipe props, dipakai adapter untuk autocomplete
 <nama>.web.<hash>.js       bundle browser
-<nama>.ssr.<hash>.js       bundle server (React/Vue/Svelte saja)
+<nama>.ssr.<hash>.js       bundle server untuk SSR
 <nama>.native.<hash>.js    bundle untuk QuickJS / JavaScriptCore (komponen xp saja)
 ```
 
@@ -102,12 +102,12 @@ Ukuran contoh yang ada di repo:
 
 | Komponen | web | ssr | native |
 |---|---|---|---|
-| `promo-modal` (xp) | 14 kB | sama dengan web | 8 kB |
+| `promo-modal` (xp) | 13 kB (5 kB gzip) | 10 kB | 8 kB |
 | `like-button` (React) | 220 kB | 219 kB | - |
 | `rating-stars` (Vue) | 70 kB | 82 kB | - |
 | `faq-list` (Svelte) | 64 kB | 30 kB | - |
 
-Setiap bundle React/Vue/Svelte membawa runtime framework sendiri. Untuk satu dua komponen tidak masalah, tapi kalau satu halaman memuat banyak komponen React, ukurannya ikut berlipat.
+Browser hanya mengunduh bundle `web`; bundle `ssr` dipakai server. Setiap bundle membawa runtime-nya sendiri (sekitar 11 kB untuk komponen xp, jauh lebih besar untuk React/Vue/Svelte). Untuk satu dua komponen tidak masalah, tapi kalau satu halaman memuat banyak komponen, ukurannya ikut berlipat.
 
 ### Development repo ini
 
@@ -115,9 +115,10 @@ Setiap bundle React/Vue/Svelte membawa runtime framework sendiri. Untuk satu dua
 npm install
 npx github:fadhelmurphy/xp build examples -y   # build contoh ke dist/
 npx github:fadhelmurphy/xp serve               # remote di :4400
-npm test                                        # 36 test
+npm test                                        # 40 test
 npm run e2e                                     # tes app Next.js/Nuxt di Chromium (APP_URL=http://localhost:3300)
-npm run e2e:dev                                 # tes xp dev di Chromium
+npm run e2e:dev                                 # tes pratinjau xp dev di Chromium
+node tests/e2e/consumer-dev.mjs                 # tes xp dev dengan next dev / nuxt dev (lihat isi file)
 ```
 
 ## xp dev
@@ -133,7 +134,7 @@ npx github:fadhelmurphy/xp dev
 
 Setiap build baru langsung dimuat tanpa restart app. Nilai `useState` di komponen dibawa ke versi baru, jadi kalau kamu sedang di slide ketiga atau modal sedang terbuka, posisinya tetap. State tidak dibawa kalau urutan atau jenis state di posisi itu berubah. Komponen React, Vue, dan Svelte dimuat ulang dari awal.
 
-Untuk konsumen web (Next.js, Nuxt), manifest dicek ulang setiap `revalidate` detik, jadi cukup refresh halaman.
+Di app Next.js atau Nuxt yang dijalankan dengan `next dev` atau `nuxt dev`, komponen di halaman juga langsung diganti versi baru tanpa refresh, dengan state yang sama. Ini hanya aktif kalau remote-nya `xp dev`; di production tidak ada sambungan tambahan.
 
 ## Signing
 
@@ -332,7 +333,7 @@ Beberapa hal yang perlu diketahui:
 
 - `withXP` mengunduh file `.d.ts` ke `xp-env.d.ts`, jadi props yang salah langsung ketahuan oleh TypeScript.
 - Manifest dicek ulang setiap `revalidate` detik. Deploy komponen baru langsung terpakai tanpa rebuild app.
-- Bundle dicocokkan dengan `sha256` di manifest sebelum dijalankan. Dengan `publicKey`, manifest juga harus ditandatangani (lihat [Signing](#signing)).
+- Bundle dicocokkan dengan `sha256` di manifest sebelum dijalankan, di server maupun di browser. Dengan `publicKey`, manifest juga harus ditandatangani (lihat [Signing](#signing)).
 - Kalau remote mati saat build, dipakai manifest terakhir yang tersimpan di `.xp/`.
 - Remote cukup static hosting atau CDN dengan CORS. `manifest.json` di-cache sebentar, file ber-hash di-cache `immutable` (contohnya di `cli/serve.mjs`).
 
@@ -512,7 +513,8 @@ Yang sudah dites:
 - Adapter Next.js dan Nuxt, end-to-end di Chromium, termasuk hydrate yang memakai elemen dari server dan swipe dengan mouse.
 - CLI dari proyek terpisah, lewat `npm pack` dan langsung lewat `npx github:fadhelmurphy/xp`, termasuk menu interaktif.
 - `setTimeout`/`setInterval` dan snapshot state di QuickJS dan JavaScriptCore (lewat Bun).
-- `xp dev` di Chromium: file diubah, pratinjau memuat versi baru, state tetap.
+- `xp dev` di Chromium: file diubah, pratinjau memuat versi baru, state tetap. Hal yang sama dengan `next dev` dan `nuxt dev`.
+- Browser menolak bundle web yang hash-nya tidak cocok dengan manifest.
 - Signing: tanda tangan dari Node diverifikasi WebCrypto, Next.js (manifest yang diubah ditolak), dan Kotlin lewat kotlinc.
 
 Yang belum:
@@ -522,5 +524,4 @@ Yang belum:
 - Belum ada GIF demo untuk Android dan iOS.
 - Layout di mobile belum memakai Yoga, jadi hasilnya bisa sedikit berbeda dari web.
 - Belum ada animasi yang mengikuti jari selama digeser.
-- Konsumen web (Next.js, Nuxt) belum dapat reload otomatis dari `xp dev`; halamannya perlu di-refresh.
-- Manifest dan bundle SSR dicek di server Next.js/Nuxt. Browser memuat bundle web dari alamat yang sudah dicek itu, tapi isi filenya belum dicocokkan ulang dengan hash di browser.
+- Runtime xp ikut di setiap bundle web (sekitar 11 kB per komponen). Belum ada runtime bersama untuk banyak komponen di satu halaman.

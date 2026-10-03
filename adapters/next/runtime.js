@@ -52,13 +52,16 @@ async function getManifest(base, init, publicKey) {
 /**
  * @param {string} base URL remote
  * @param {string} name nama komponen
- * @param {{ revalidate?: number, publicKey?: string }} options publicKey: hanya terima manifest yang
- *   ditandatangani kunci ini (`xp build --sign`)
+ * @param {{ revalidate?: number, publicKey?: string, dev?: boolean }} options
+ *   publicKey: hanya terima manifest yang ditandatangani kunci ini (`xp build --sign`)
+ *   dev: `next dev`; manifest tidak di-cache dan island mengikuti build baru dari `xp dev`
  */
-export function remote(base, name, { revalidate = 30, publicKey } = {}) {
+export function remote(base, name, { revalidate = 30, publicKey, dev = false } = {}) {
   async function XPRemote(props) {
     // Manifest di-revalidate berkala → deploy remote terbaru terpakai tanpa rebuild app ini.
-    let entry = (await getManifest(base, { next: { revalidate } }, publicKey)).components?.[name];
+    const init = dev ? { cache: "no-store" } : { next: { revalidate } };
+    const manifest = await getManifest(base, init, publicKey);
+    let entry = manifest.components?.[name];
     if (!entry) {
       // Manifest di cache bisa lebih lama dari komponen yang di-import (mis. komponen baru):
       // ambil ulang tanpa cache sebelum menyerah.
@@ -73,7 +76,9 @@ export function remote(base, name, { revalidate = 30, publicKey } = {}) {
     const server = entry.ssr ?? entry.web;
     const mod = await loadModule(`${base}/${server.file}`, server.sha256);
     const html = await mod.renderHTML(props); // Vue: Promise, lainnya: string
-    return createElement(XPIsland, { src, html, props });
+    // live: hanya kalau app dijalankan dengan `next dev` dan remote-nya `xp dev`.
+    const live = dev && manifest.dev === true;
+    return createElement(XPIsland, { src, sha256: entry.web.sha256, html, props, base, name, live });
   }
   XPRemote.displayName = `XP(${name})`;
   return XPRemote;

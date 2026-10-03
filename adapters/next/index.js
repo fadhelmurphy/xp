@@ -24,6 +24,7 @@ export function withXP(nextConfig = {}, { remotes, revalidate = 30, dir = ".xp",
 
   return async (phase, ctx) => {
     const base = typeof nextConfig === "function" ? await nextConfig(phase, ctx) : nextConfig;
+    const dev = phase === "phase-development-server";
     const root = process.cwd();
     const outDir = path.join(root, dir);
     const alias = {};
@@ -57,7 +58,7 @@ export function withXP(nextConfig = {}, { remotes, revalidate = 30, dir = ".xp",
           file,
           `// Dibuat otomatis oleh @xp/next. Jangan diedit.\n` +
             `import { remote } from "@xp/next/runtime";\n` +
-            `export default remote(${JSON.stringify(url)}, ${JSON.stringify(name)}, ${JSON.stringify({ revalidate, publicKey })});\n`,
+            `export default remote(${JSON.stringify(url)}, ${JSON.stringify(name)}, ${JSON.stringify({ revalidate, publicKey, dev })});\n`,
         );
         alias[spec] = file;
 

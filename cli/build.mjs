@@ -43,7 +43,7 @@ const xpCommon = {
 };
 
 const xpBuilds = {
-  // CJS mandiri: render (browser) + renderHTML (SSR), runtime xp ikut di dalamnya.
+  // CJS mandiri untuk browser: render/hydrate ke DOM. Runtime xp ikut di dalamnya.
   web: (entry) => ({
     ...xpCommon,
     format: "cjs",
@@ -52,10 +52,24 @@ const xpBuilds = {
       contents: `
         import C from ${JSON.stringify(entry)};
         import { mount } from "@xp/runtime/hosts/dom";
+        export const protocol = ${PROTOCOL_VERSION};
+        export const framework = "xp";
+        export const render = (el, props, opts) => mount(el, C, props, opts);`,
+      resolveDir: RUNTIME,
+      loader: "tsx",
+    },
+  }),
+  // CJS mandiri untuk server: renderHTML (SSR), tanpa kode DOM.
+  ssr: (entry) => ({
+    ...xpCommon,
+    format: "cjs",
+    platform: "neutral",
+    stdin: {
+      contents: `
+        import C from ${JSON.stringify(entry)};
         import { renderToString } from "@xp/runtime/hosts/html";
         export const protocol = ${PROTOCOL_VERSION};
         export const framework = "xp";
-        export const render = (el, props, opts) => mount(el, C, props, opts);
         export const renderHTML = (props) => renderToString(C, props);`,
       resolveDir: RUNTIME,
       loader: "tsx",
@@ -105,7 +119,7 @@ export function plan(components, target, { explicit = false } = {}) {
   const skipped = [];
   for (const c of components) {
     if (c.kind === "xp") {
-      jobs.push({ ...c, outputs: target === "web" ? ["web"] : ["web", "native"] });
+      jobs.push({ ...c, outputs: target === "web" ? ["web", "ssr"] : ["web", "ssr", "native"] });
     } else if (target === "crossplatform") {
       const reason = `komponen ${c.kind} hanya bisa target web (iOS/Android butuh komponen @xp/runtime)`;
       if (explicit) throw new Error(`${c.name}: ${reason}`);
@@ -140,7 +154,7 @@ function formatError(e) {
  * Jalankan build.
  * Build parsial (sebagian komponen) mempertahankan komponen lain di manifest, kecuali `clean`.
  */
-export async function runBuild({ srcDir, outDir, jobs, clean = false, projectDir = process.cwd(), signingKey = null }) {
+export async function runBuild({ srcDir, outDir, jobs, clean = false, projectDir = process.cwd(), signingKey = null, dev = false }) {
   const manifestPath = path.join(outDir, "manifest.json");
   let manifest = { protocol: PROTOCOL_VERSION, builtAt: "", components: {} };
   if (clean) await rm(outDir, { recursive: true, force: true });
@@ -213,6 +227,9 @@ export async function runBuild({ srcDir, outDir, jobs, clean = false, projectDir
   }
 
   manifest.builtAt = new Date().toISOString();
+  // Ditandai oleh xp dev: adapter web di mode dev hanya berlangganan /__xp/events kalau ada tanda ini.
+  if (dev) manifest.dev = true;
+  else delete manifest.dev;
   manifest.components = Object.fromEntries(Object.entries(manifest.components).sort(([a], [b]) => a.localeCompare(b)));
   const text = JSON.stringify(manifest, null, 2);
   await writeFile(manifestPath, text);

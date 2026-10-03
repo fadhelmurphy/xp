@@ -1,11 +1,13 @@
 // Runtime isomorfik (server & browser), tanpa framework.
 // Dipakai oleh wrapper per framework (Vue, Svelte, ...) yang dibuat plugin xp().
+import { loadBundle } from "./client.js";
 import { verifyManifest } from "./verify.js";
+
+export { swapInstance, watchDev } from "./client.js";
 
 const PROTOCOL = 1;
 const manifests = new Map(); // base → { data, expires }
 const serverModules = new Map(); // src → exports
-const clientModules = new Map(); // src → Promise<exports>
 
 function evaluate(code) {
   // Bundle web xp = CJS mandiri (runtime ikut di dalamnya), tidak me-require apa pun.
@@ -49,12 +51,15 @@ export async function getManifest(base, revalidate = 30, publicKey = null) {
 }
 
 /** Server: ambil bundle (diverifikasi sha256) lalu render HTML. */
-export async function renderRemote(base, name, props, revalidate = 30, publicKey = null) {
-  let entry = (await getManifest(base, revalidate, publicKey)).components?.[name];
+export async function renderRemote(base, name, props, revalidate = 30, publicKey = null, dev = false) {
+  if (dev) revalidate = 0; // dev server: selalu manifest terbaru
+  let manifest = await getManifest(base, revalidate, publicKey);
+  let entry = manifest.components?.[name];
   if (!entry) {
     // Manifest di cache bisa lebih lama dari komponen yang di-import: ambil ulang sekali.
     manifests.delete(base);
-    entry = (await getManifest(base, revalidate, publicKey)).components?.[name];
+    manifest = await getManifest(base, revalidate, publicKey);
+    entry = manifest.components?.[name];
   }
   if (!entry) throw new Error(`[xp] komponen "${name}" tidak ada di ${base}/manifest.json`);
   // Browser memuat bundle `web`. Server memakai bundle `ssr` kalau ada (komponen React/Vue/Svelte).
@@ -72,27 +77,18 @@ export async function renderRemote(base, name, props, revalidate = 30, publicKey
     mod = evaluate(code);
     serverModules.set(serverSrc, mod);
   }
-  return { src, html: await mod.renderHTML(props) }; // Vue: Promise, lainnya: string
+  return {
+    src,
+    sha256: entry.web.sha256,
+    html: await mod.renderHTML(props), // Vue: Promise, lainnya: string
+    // live: hanya kalau app dijalankan di dev server Vite dan remote-nya `xp dev`.
+    live: dev && manifest.dev === true,
+  };
 }
 
-/** Browser: muat bundle yang sama (file ber-hash → cache browser/CDN). */
-export function loadClient(src) {
-  if (!clientModules.has(src)) {
-    clientModules.set(
-      src,
-      fetch(src)
-        .then((r) => {
-          if (!r.ok) throw new Error(`${src} → HTTP ${r.status}`);
-          return r.text();
-        })
-        .then(evaluate)
-        .catch((e) => {
-          clientModules.delete(src); // coba lagi nanti
-          throw e;
-        }),
-    );
-  }
-  return clientModules.get(src);
+/** Browser: muat bundle web (file ber-hash → cache browser/CDN), dicek sha256-nya. */
+export function loadClient(src, sha256) {
+  return loadBundle(src, sha256);
 }
 
 /** Props untuk komponen xp harus bisa di-JSON-kan. Buang function & undefined. */
