@@ -45,7 +45,23 @@ Opsi `build`:
 -y, --yes          jangan tanya apa-apa
 ```
 
-Kalau dijalankan di terminal tanpa `--target` atau `--only`, xp akan bertanya dulu: build semua komponen atau pilih sendiri (bisa satu atau beberapa), lalu targetnya.
+Kalau dijalankan di terminal tanpa `--target` atau `--only`, xp akan bertanya dulu:
+
+```
+◆  Komponen yang mau di-build?
+│  ● Semua (5)
+│  ○ Pilih sendiri
+```
+
+Pilih "Semua" untuk build semua komponen di folder. Pilih "Pilih sendiri" untuk memilih satu atau beberapa komponen (spasi untuk mencentang, `a` untuk centang semua). Setelah itu xp menanyakan target.
+
+Tanpa menu, misalnya untuk CI:
+
+```bash
+npx github:fadhelmurphy/xp build -y                                   # semua komponen, target auto
+npx github:fadhelmurphy/xp build -o promo-modal                       # satu komponen
+npx github:fadhelmurphy/xp build -o promo-modal,promo-slider -t crossplatform
+```
 
 Arti target:
 
@@ -417,7 +433,7 @@ Yang sudah dites:
 - Runtime, protokol, host DOM/SSR/native, CLI, dan manifest. Bundle native dijalankan di QuickJS dan hasil tree-nya dicek di unit test.
 - Target web untuk React, Vue, dan Svelte (SSR, hydrate, scoped CSS) di jsdom dan Chromium.
 - Adapter Next.js dan Nuxt, end-to-end di Chromium.
-- CLI dari proyek terpisah lewat `npm pack`, termasuk mode interaktif.
+- CLI dari proyek terpisah, lewat `npm pack` dan langsung lewat `npx github:fadhelmurphy/xp`, termasuk menu interaktif.
 
 Yang belum:
 
