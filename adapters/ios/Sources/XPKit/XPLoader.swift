@@ -12,6 +12,7 @@ public struct XPBundle {
 /// Mengambil komponen dari remote hasil `xp build`:
 ///   <base>/manifest.json → components[name].native.file → <base>/<file>
 /// File ber-hash di-cache di memori; manifest selalu diambil ulang.
+/// Dengan `publicKey`, manifest harus ditandatangani (`xp build --sign`): manifest.sig dicek dulu.
 public actor XPLoader {
     public static let shared = XPLoader()
 
@@ -22,9 +23,20 @@ public actor XPLoader {
         self.session = session
     }
 
-    public func load(base: URL, name: String) async throws -> XPBundle {
+    public func load(base: URL, name: String, publicKey: String? = nil) async throws -> XPBundle {
         let manifestURL = base.appendingPathComponent("manifest.json")
         let manifestData = try await get(manifestURL)
+        if let publicKey {
+            let sigData: Data
+            do {
+                sigData = try await get(base.appendingPathComponent("manifest.sig"))
+            } catch {
+                throw XPError.load("manifest belum ditandatangani (\(error.localizedDescription))")
+            }
+            guard XPSignature.verify(manifest: manifestData, signatureBase64: String(decoding: sigData, as: UTF8.self), publicKeyBase64: publicKey) else {
+                throw XPError.load("tanda tangan manifest tidak valid, remote ditolak")
+            }
+        }
         guard let manifest = try JSONSerialization.jsonObject(with: manifestData) as? [String: Any] else {
             throw XPError.load("manifest.json tidak valid")
         }

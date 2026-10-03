@@ -13,6 +13,7 @@ import java.util.concurrent.Executors
  *
  * Kontrak dengan runtime xp (mode antrean): setiap XP.* mengembalikan string JSON
  * berisi daftar batch operasi UI, sinkron. Tidak perlu bridge maupun microtask.
+ * Timer (setTimeout/setInterval) dijalankan lewat nextTimer() + tick().
  */
 class XPEngine private constructor(
     private val quickJs: QuickJs,
@@ -49,7 +50,12 @@ class XPEngine private constructor(
 
     private var closed = false
 
-    suspend fun mount(propsJson: String): String = call("XP.mount(${XPJson.quote(propsJson)})")
+    /** `snapshotJson`: hasil snapshot() dari engine sebelumnya (reload saat development). */
+    suspend fun mount(propsJson: String, snapshotJson: String = "null"): String =
+        call("XP.mount(${XPJson.quote(propsJson)}, ${XPJson.quote(snapshotJson)})")
+
+    /** State useState komponen saat ini, untuk dipakai bundle versi baru. */
+    suspend fun snapshot(): String = call("typeof XP.snapshot === 'function' ? XP.snapshot() : 'null'")
 
     suspend fun update(propsJson: String): String = call("XP.update(${XPJson.quote(propsJson)})")
 
@@ -57,6 +63,15 @@ class XPEngine private constructor(
         call("XP.dispatch(${XPJson.quote(handlerKey)}, ${XPJson.quote(XPJson.stringify(args))})")
 
     suspend fun unmount(): String = call("XP.unmount()")
+
+    /** Jalankan timer (setTimeout/setInterval) yang sudah jatuh tempo. */
+    suspend fun tick(): String = call("typeof XP.tick === 'function' ? XP.tick() : '[]'")
+
+    /** ms sampai timer berikutnya, atau -1 kalau tidak ada. */
+    suspend fun nextTimer(): Long = withContext(thread) {
+        check(!closed) { "XPEngine sudah ditutup" }
+        (quickJs.evaluate("typeof XP.nextTimer === 'function' ? XP.nextTimer() : -1", "xp-timer") as? Number)?.toLong() ?: -1L
+    }
 
     private suspend fun call(script: String): String = withContext(thread) {
         check(!closed) { "XPEngine sudah ditutup" }

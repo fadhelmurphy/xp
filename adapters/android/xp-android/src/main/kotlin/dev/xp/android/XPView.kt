@@ -13,6 +13,9 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -68,6 +71,8 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import coil3.compose.AsyncImage
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -81,6 +86,9 @@ private const val TAG = "XP"
  *            props = mapOf("title" to "Kelas IELTS", "price" to 150000))
  *
  * Props harus bisa di-JSON-kan: String, Number, Boolean, null, List, Map.
+ *
+ * @param publicKey kunci publik dari `xp keygen`; manifest yang tidak ditandatangani kunci ini ditolak.
+ * @param live development: sambung ke `xp dev` dan muat ulang setiap build baru (state dipertahankan).
  */
 @Composable
 fun XPView(
@@ -88,24 +96,27 @@ fun XPView(
     name: String,
     props: Map<String, Any?> = emptyMap(),
     modifier: Modifier = Modifier,
+    publicKey: String? = null,
+    live: Boolean = false,
     loading: @Composable () -> Unit = { CircularProgressIndicator() },
     error: @Composable (Throwable) -> Unit = { Text("Gagal memuat $name: ${it.message}", color = Color(0xFFCF222E)) },
 ) {
     val propsJson = remember(props) { XPJson.stringify(props) }
-    val holder = remember(base, name) { XPHolder() }
     val scope = rememberCoroutineScope()
+    val holder = remember(base, name) { XPHolder(scope) }
     SideEffect { holder.latestProps = propsJson }
 
     // Unduh bundle → jalankan di QuickJS → mount.
     LaunchedEffect(holder) {
         try {
-            val bundle = XPLoader.load(base, name)
+            val bundle = XPLoader.load(base, name, publicKey)
             val engine = XPEngine.create(bundle.code, bundle.file)
             if (holder.disposed) {
                 engine.close()
                 return@LaunchedEffect
             }
             holder.engine = engine
+            holder.file = bundle.file
             holder.mutex.withLock {
                 holder.mountedProps = holder.latestProps
                 holder.apply(engine.mount(holder.latestProps))
@@ -127,6 +138,21 @@ fun XPView(
             if (holder.mountedProps == propsJson) return@withLock
             holder.mountedProps = propsJson
             holder.apply(engine.update(propsJson))
+        }
+    }
+
+    // xp dev: build baru → bundle baru, state lama dibawa lewat snapshot.
+    LaunchedEffect(holder, live, holder.state) {
+        if (!live || holder.state != XPState.Ready) return@LaunchedEffect
+        XPLive.updates(base).collect { names ->
+            if (name !in names) return@collect
+            try {
+                holder.reload(XPLoader.load(base, name, publicKey))
+            } catch (c: CancellationException) {
+                throw c
+            } catch (t: Throwable) {
+                Log.e(TAG, "reload $name gagal", t)
+            }
         }
     }
 
@@ -176,10 +202,11 @@ private sealed interface XPState {
     data class Failed(val error: Throwable) : XPState
 }
 
-private class XPHolder {
-    val tree = XPTree()
+private class XPHolder(private val scope: CoroutineScope) {
+    var tree by mutableStateOf(XPTree())
     val mutex = Mutex()
     var engine: XPEngine? = null
+    var file: String? = null
     var disposed = false
     var mountedProps: String? = null
     var mountRevision = 0
@@ -187,9 +214,57 @@ private class XPHolder {
     var state by mutableStateOf<XPState>(XPState.Loading)
     var revision by mutableIntStateOf(0)
 
+    /** Ganti ke bundle baru (xp dev). State useState dibawa lewat snapshot. */
+    suspend fun reload(bundle: XPBundle) {
+        if (bundle.file == file) return
+        val next = XPEngine.create(bundle.code, bundle.file)
+        mutex.withLock {
+            val old = engine
+            if (disposed || old == null) {
+                next.close()
+                return
+            }
+            val snapshot = old.snapshot()
+            val fresh = XPTree()
+            fresh.applyBatches(next.mount(latestProps, snapshot))
+            tree = fresh
+            engine = next
+            file = bundle.file
+            mountedProps = latestProps
+            revision = fresh.revision
+            mountRevision = fresh.revision
+            old.close()
+            armTimer()
+        }
+    }
+
+    /** Dipanggil di dalam mutex. Setiap hasil XP.* bisa menjadwalkan timer baru. */
     fun apply(batchesJson: String) {
         tree.applyBatches(batchesJson)
         revision = tree.revision
+        armTimer()
+    }
+
+    // Timer JS (setTimeout/setInterval): tunggu XP.nextTimer() ms, lalu XP.tick().
+    // Tidak memakai cancel: hasil tick yang sedang berjalan tidak boleh hilang. Job lama
+    // cukup berhenti sendiri kalau generasinya sudah lewat.
+    private var timerGen = 0
+
+    private fun armTimer() {
+        val gen = ++timerGen
+        scope.launch {
+            try {
+                val engine = engine ?: return@launch
+                val wait = mutex.withLock { if (gen != timerGen || disposed) -1L else engine.nextTimer() }
+                if (wait < 0) return@launch
+                delay(wait)
+                mutex.withLock { if (gen == timerGen && !disposed) apply(engine.tick()) }
+            } catch (c: CancellationException) {
+                throw c
+            } catch (t: Throwable) {
+                Log.e(TAG, "timer gagal", t)
+            }
+        }
     }
 }
 
@@ -314,6 +389,24 @@ private fun Modifier.entering(node: XPNode, ctx: XPRenderCtx): Modifier {
     }
 }
 
+/** onSwipe: geseran minimal XPGesture.THRESHOLD dp. Tap biasa tetap sampai ke clickable. */
+private fun Modifier.swipe(node: XPNode, ctx: XPRenderCtx): Modifier {
+    val key = node.handler("onSwipe") ?: return this
+    val dispatch = ctx.dispatch
+    return pointerInput(key) {
+        var total = Offset.Zero
+        detectDragGestures(
+            onDragStart = { total = Offset.Zero },
+            onDragEnd = {
+                XPGesture.direction(total.x.toDp().value, total.y.toDp().value)?.let { dispatch(key, listOf(it)) }
+            },
+        ) { change, amount ->
+            change.consume()
+            total += amount
+        }
+    }
+}
+
 private fun Modifier.testTagOf(node: XPNode): Modifier = node.string("testID")?.let { this.testTag(it) } ?: this
 
 // --- pemetaan primitive → Compose ---
@@ -326,7 +419,7 @@ private fun XPNodeView(ctx: XPRenderCtx, id: Int, slot: Slot) {
     val base = slot.modifier(style).testTagOf(node).entering(node, ctx)
 
     when (node.type) {
-        "View" -> XPContainer(ctx, node, style, base.xpBox(style))
+        "View" -> XPContainer(ctx, node, style, base.swipe(node, ctx).xpBox(style))
         "Pressable" -> {
             val key = node.handler("onPress")
             val click = if (key != null) {
@@ -334,7 +427,7 @@ private fun XPNodeView(ctx: XPRenderCtx, id: Int, slot: Slot) {
             } else {
                 Modifier
             }
-            XPContainer(ctx, node, style, base.xpBox(style, click))
+            XPContainer(ctx, node, style, base.swipe(node, ctx).xpBox(style, click))
         }
         "ScrollView" -> {
             val horizontal = node.bool("horizontal")

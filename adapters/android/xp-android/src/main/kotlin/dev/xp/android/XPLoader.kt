@@ -16,13 +16,25 @@ class XPLoadException(message: String, cause: Throwable? = null) : Exception(mes
  * Mengambil komponen dari remote hasil `xp build`:
  *   <base>/manifest.json → components[name].native.file → <base>/<file>
  * File ber-hash di-cache di memori; manifest selalu diambil ulang (versi terbaru).
+ * Dengan `publicKey`, manifest harus ditandatangani (`xp build --sign`): manifest.sig dicek dulu.
  */
 object XPLoader {
     private val cache = ConcurrentHashMap<String, String>() // url bundle → kode
 
-    suspend fun load(base: String, name: String): XPBundle = withContext(Dispatchers.IO) {
+    suspend fun load(base: String, name: String, publicKey: String? = null): XPBundle = withContext(Dispatchers.IO) {
         val root = base.trimEnd('/')
-        val manifest = XPJson.parse(get("$root/manifest.json")) as? Map<*, *>
+        val text = get("$root/manifest.json")
+        if (publicKey != null) {
+            val signature = try {
+                get("$root/manifest.sig")
+            } catch (e: XPLoadException) {
+                throw XPLoadException("manifest belum ditandatangani (${e.message})", e)
+            }
+            if (!XPSignature.verify(text, signature, publicKey)) {
+                throw XPLoadException("tanda tangan manifest tidak valid, remote ditolak")
+            }
+        }
+        val manifest = XPJson.parse(text) as? Map<*, *>
             ?: throw XPLoadException("manifest.json tidak valid")
 
         val protocol = (manifest["protocol"] as? Number)?.toInt()

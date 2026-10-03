@@ -67,6 +67,31 @@ final class XPTreeTests: XCTestCase {
         XCTAssertEqual(tree.orphans(), [])
     }
 
+    func testSignatureFromNode() throws {
+        let url = try XCTUnwrap(Bundle.module.url(forResource: "signed-manifest", withExtension: "json", subdirectory: "Fixtures"))
+        let fixture = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(contentsOf: url)) as? [String: String])
+        let manifest = Data(try XCTUnwrap(fixture["manifest"]).utf8)
+        let signature = try XCTUnwrap(fixture["signature"])
+        let key = try XCTUnwrap(fixture["publicKey"])
+        XCTAssertTrue(XPSignature.verify(manifest: manifest, signatureBase64: signature, publicKeyBase64: key))
+        let changed = Data(String(decoding: manifest, as: UTF8.self).replacingOccurrences(of: "promo-modal", with: "promo-modaI").utf8)
+        XCTAssertFalse(XPSignature.verify(manifest: changed, signatureBase64: signature, publicKeyBase64: key))
+    }
+
+    func testDevEvents() {
+        XCTAssertEqual(XPDevEvents.parse(#"data: {"type":"update","components":["promo-slider"]}"#), ["promo-slider"])
+        XCTAssertNil(XPDevEvents.parse(#"data: {"type":"hello"}"#))
+        XCTAssertNil(XPDevEvents.parse(": ping"))
+    }
+
+    func testSwipeDirection() {
+        XCTAssertEqual(XPGesture.direction(dx: -60, dy: 10), "left")
+        XCTAssertEqual(XPGesture.direction(dx: 60, dy: -20), "right")
+        XCTAssertEqual(XPGesture.direction(dx: 5, dy: -80), "up")
+        XCTAssertEqual(XPGesture.direction(dx: 0, dy: 45), "down")
+        XCTAssertNil(XPGesture.direction(dx: 30, dy: 30))
+    }
+
     func testNumericTextHasNoDecimal() throws {
         let tree = XPTree()
         try tree.applyBatches(#"[{"v":1,"ops":[["create",1,"#text"],["props",1,{"value":3}],["children",0,[1]]]}]"#)

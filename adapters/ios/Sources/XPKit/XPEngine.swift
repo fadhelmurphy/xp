@@ -33,8 +33,14 @@ public final class XPEngine {
         return engine
     }
 
-    public func mount(_ propsJSON: String) async throws -> String {
-        try await call("XP.mount(\(XPJSON.quote(propsJSON)))")
+    /// `snapshot`: hasil snapshot() dari engine sebelumnya (reload saat development).
+    public func mount(_ propsJSON: String, snapshot: String = "null") async throws -> String {
+        try await call("XP.mount(\(XPJSON.quote(propsJSON)), \(XPJSON.quote(snapshot)))")
+    }
+
+    /// State useState komponen saat ini, untuk dipakai bundle versi baru.
+    public func snapshot() async throws -> String {
+        try await call("typeof XP.snapshot === 'function' ? XP.snapshot() : 'null'")
     }
 
     public func update(_ propsJSON: String) async throws -> String {
@@ -48,6 +54,21 @@ public final class XPEngine {
 
     public func unmount() async throws -> String {
         try await call("XP.unmount()")
+    }
+
+    /// Jalankan timer (setTimeout/setInterval) yang sudah jatuh tempo.
+    public func tick() async throws -> String {
+        try await call("typeof XP.tick === 'function' ? XP.tick() : '[]'")
+    }
+
+    /// ms sampai timer berikutnya, atau -1 kalau tidak ada.
+    public func nextTimer() async throws -> Int {
+        try await run {
+            guard let ctx = self.context else { throw XPError.script("engine sudah ditutup") }
+            let value = ctx.evaluateScript("typeof XP.nextTimer === 'function' ? XP.nextTimer() : -1")
+            try self.throwIfException()
+            return Int(value?.toDouble() ?? -1)
+        }
     }
 
     public func close() {

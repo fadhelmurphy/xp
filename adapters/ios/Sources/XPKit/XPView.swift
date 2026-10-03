@@ -9,22 +9,35 @@ private let logger = Logger(subsystem: "dev.xp", category: "XPKit")
 ///            props: ["title": "Kelas IELTS", "price": 150000])
 ///
 /// Props harus bisa di-JSON-kan: String, angka, Bool, NSNull, Array, Dictionary.
+///
+/// - `publicKey`: kunci publik dari `xp keygen`; manifest yang tidak ditandatangani kunci ini ditolak.
+/// - `live`: development, sambung ke `xp dev` dan muat ulang setiap build baru (state dipertahankan).
 public struct XPView: View {
     private let base: URL
     private let name: String
     private let propsJSON: String
+    private let publicKey: String?
+    private let live: Bool
     @StateObject private var model = XPModel()
 
-    public init(base: URL, name: String, props: [String: Any] = [:]) {
+    public init(base: URL, name: String, props: [String: Any] = [:], publicKey: String? = nil, live: Bool = false) {
         self.base = base
         self.name = name
         self.propsJSON = (try? XPJSON.stringify(props)) ?? "{}"
+        self.publicKey = publicKey
+        self.live = live
     }
 
     public var body: some View {
         content
             .task(id: "\(base.absoluteString)|\(name)") {
-                await model.load(base: base, name: name, propsJSON: propsJSON)
+                await model.load(base: base, name: name, propsJSON: propsJSON, publicKey: publicKey)
+            }
+            .task(id: "\(base.absoluteString)|\(name)|\(live)") {
+                guard live else { return }
+                for await names in XPDevEvents.updates(base: base) where names.contains(name) {
+                    await model.reload(base: base, name: name, publicKey: publicKey)
+                }
             }
             .onChange(of: propsJSON) { newValue in
                 model.update(newValue)
@@ -60,23 +73,25 @@ final class XPModel: ObservableObject {
     @Published private(set) var revision = 0
     /// Revisi setelah mount; node yang dibuat sesudahnya boleh menjalankan animasi `entering`.
     private(set) var mountRevision = 0
-    let tree = XPTree()
+    private(set) var tree = XPTree()
 
     private var engine: XPEngine?
+    private var file: String?
     private var loadedKey: String?
     private var mountedProps: String?
     private var latestProps = "{}"
     private var pending: Task<Void, Never>?
 
-    func load(base: URL, name: String, propsJSON: String) async {
+    func load(base: URL, name: String, propsJSON: String, publicKey: String? = nil) async {
         latestProps = propsJSON
         let key = "\(base.absoluteString)|\(name)"
         guard loadedKey != key else { return }
         loadedKey = key
         do {
-            let bundle = try await XPLoader.shared.load(base: base, name: name)
+            let bundle = try await XPLoader.shared.load(base: base, name: name, publicKey: publicKey)
             let engine = try await XPEngine.create(bundle: bundle.code, fileName: bundle.file)
             self.engine = engine
+            self.file = bundle.file
             let props = latestProps
             let batches = try await engine.mount(props)
             mountedProps = props
@@ -87,6 +102,29 @@ final class XPModel: ObservableObject {
         } catch {
             logger.error("gagal memuat \(name, privacy: .public): \(error.localizedDescription, privacy: .public)")
             state = .failed(error.localizedDescription)
+        }
+    }
+
+    /// xp dev: ganti ke bundle baru, state useState dibawa lewat snapshot.
+    func reload(base: URL, name: String, publicKey: String?) async {
+        guard case .ready = state else { return }
+        do {
+            let bundle = try await XPLoader.shared.load(base: base, name: name, publicKey: publicKey)
+            guard bundle.file != file else { return }
+            let next = try await XPEngine.create(bundle: bundle.code, fileName: bundle.file)
+            enqueue { old in
+                let snapshot = try await old.snapshot()
+                let batches = try await next.mount(self.latestProps, snapshot: snapshot)
+                self.engine = next
+                self.file = bundle.file
+                self.mountedProps = self.latestProps
+                self.tree = XPTree()
+                try self.apply(batches)
+                self.mountRevision = self.tree.revision
+                old.close()
+            }
+        } catch {
+            logger.error("reload \(name, privacy: .public) gagal: \(error.localizedDescription, privacy: .public)")
         }
     }
 
@@ -125,6 +163,26 @@ final class XPModel: ObservableObject {
     private func apply(_ json: String) throws {
         try tree.applyBatches(json)
         revision = tree.revision
+        armTimer()
+    }
+
+    // Timer JS (setTimeout/setInterval): tunggu XP.nextTimer() ms, lalu XP.tick() lewat antrean event.
+    // Task lama tidak dibatalkan; ia berhenti sendiri kalau generasinya sudah lewat.
+    private var timerGen = 0
+
+    private func armTimer() {
+        guard let engine else { return }
+        timerGen += 1
+        let gen = timerGen
+        Task { @MainActor in
+            guard let wait = try? await engine.nextTimer(), wait >= 0, gen == self.timerGen else { return }
+            try? await Task.sleep(nanoseconds: UInt64(wait) * 1_000_000)
+            guard gen == self.timerGen else { return }
+            self.enqueue { engine in
+                guard gen == self.timerGen else { return }
+                try self.apply(try await engine.tick())
+            }
+        }
     }
 }
 
@@ -192,12 +250,12 @@ struct XPRenderer {
         let view: AnyView
         switch n.type {
         case "View":
-            view = box(container(n.children, s), s, fillWidth, fillHeight, align: containerAlign(s))
+            view = swipe(n, box(container(n.children, s), s, fillWidth, fillHeight, align: containerAlign(s)))
 
         case "Pressable":
             let key = n.handler("onPress")
             let content = box(container(n.children, s), s, fillWidth, fillHeight, align: containerAlign(s))
-            view = AnyView(
+            view = swipe(n, AnyView(
                 Button {
                     if let key { model.dispatch(key) }
                 } label: {
@@ -205,7 +263,7 @@ struct XPRenderer {
                 }
                 .buttonStyle(.plain)
                 .disabled(key == nil || n.bool("disabled"))
-            )
+            ))
 
         case "ScrollView":
             let horizontal = n.bool("horizontal")
@@ -277,6 +335,18 @@ struct XPRenderer {
     }
 
     /// Box model: padding → ukuran → latar/border/sudut → opacity → margin.
+    /// onSwipe: geseran minimal XPGesture.threshold pt. Dipasang simultan supaya tap Button tetap jalan.
+    private func swipe(_ n: XPNode, _ v: AnyView) -> AnyView {
+        guard let key = n.handler("onSwipe") else { return v }
+        return AnyView(v.simultaneousGesture(
+            DragGesture(minimumDistance: 20).onEnded { g in
+                if let dir = XPGesture.direction(dx: g.translation.width, dy: g.translation.height) {
+                    model.dispatch(key, [dir])
+                }
+            }
+        ))
+    }
+
     private func box<V: View>(_ v: V, _ s: XPStyle, _ fillWidth: Bool, _ fillHeight: Bool,
                               align: Alignment, clip: Bool = false) -> AnyView {
         var out = AnyView(v.padding(EdgeInsets(top: s.padding.top, leading: s.padding.leading,
