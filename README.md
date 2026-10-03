@@ -5,7 +5,7 @@ Tulis komponen sekali dengan JSX + hooks, lalu satu perintah build menghasilkan 
 ```bash
 npm install
 npm run build   # xp build examples --out dist
-npm test        # 17 test: QuickJS (native), SSR, DOM, reconciler
+npm test        # 19 test: QuickJS (native), SSR, DOM, reconciler, slider
 npm run serve   # xp serve dist --port 4400 (CORS + cache header)
 npm run e2e     # app konsumen (Next.js/Nuxt) di Chromium, APP_URL=http://localhost:3300
 npm run demo:gif  # rekam ulang GIF demo web, APP_URL=... OUT=docs/demo-next.gif
@@ -17,8 +17,8 @@ npm run demo:gif  # rekam ulang GIF demo web, APP_URL=... OUT=docs/demo-next.gif
 dist/
   manifest.json                      → nama → file terbaru, hash, primitive yang dipakai
   promo-modal.<hash>.d.ts            → tipe props (untuk autocomplete di app konsumen)
-  promo-modal.web.<hash>.js          → browser + SSR     (~10 kB, runtime ikut)
-  promo-modal.native.<hash>.js       → QuickJS (Android) / JavaScriptCore (iOS) (~6 kB, runtime ikut)
+  promo-modal.web.<hash>.js          → browser + SSR     (~11 kB, runtime ikut)
+  promo-modal.native.<hash>.js       → QuickJS (Android) / JavaScriptCore (iOS) (~7 kB, runtime ikut)
 ```
 
 ## Menulis komponen
