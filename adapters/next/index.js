@@ -9,7 +9,17 @@ import path from "node:path";
 const PROTOCOL = 1;
 
 async function fetchText(url) {
-  const res = await fetch(url, { signal: AbortSignal.timeout(10_000) });
+  let res;
+  try {
+    res = await fetch(url, { signal: AbortSignal.timeout(10_000) });
+  } catch (e) {
+    // "fetch failed" saja tidak membantu; tampilkan penyebabnya (mis. ECONNREFUSED).
+    const cause = e.cause?.code ?? e.cause?.message ?? e.message;
+    const hint = /localhost|127\.0\.0\.1/.test(url)
+      ? " Pastikan remote jalan di mesin yang sama dengan app ini (Windows dan WSL punya localhost berbeda)."
+      : "";
+    throw new Error(`${url} tidak bisa diakses (${cause}).${hint}`);
+  }
   if (!res.ok) throw new Error(`${url} → HTTP ${res.status}`);
   return res.text();
 }
