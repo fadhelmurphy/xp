@@ -126,12 +126,55 @@ Kalau memuat bundle web sendiri tanpa adapter: jalankan dulu `xp-runtime.<hash>.
 npm install
 npx github:fadhelmurphy/xp build examples -y   # build contoh ke dist/
 npx github:fadhelmurphy/xp serve               # remote di :4400
-npm test                                        # 40 test
+npm test                                        # 47 test
 npm run e2e                                     # tes app Next.js/Nuxt di Chromium (APP_URL=http://localhost:3300)
 npm run e2e:dev                                 # tes pratinjau xp dev di Chromium
 npm run e2e:remotes                             # dua remote dengan versi xp sama/beda dan urutan muat berbeda: satu runtime aktif
 node tests/e2e/consumer-dev.mjs                 # tes xp dev dengan next dev / nuxt dev (lihat isi file)
 ```
+
+### Menjalankan app contoh (Next.js dan Nuxt)
+
+App di `examples-consumer/` memasang adapter dari file `.tgz` lokal (`adapters/*/xp-*.tgz`), bukan dari npm. Jadi paketnya harus dibuat dulu dengan `npm pack`:
+
+```bash
+# dari root repo
+npm install
+npm run pack:adapters          # sama dengan npm pack di adapters/next, adapters/vite, adapters/nuxt
+```
+
+Kalau mau manual:
+
+```bash
+cd adapters/next && npm pack && cd ../..
+cd adapters/vite && npm pack && cd ../..
+cd adapters/nuxt && npm pack && cd ../..
+```
+
+Ulangi langkah ini setiap kali kode adapter berubah (misalnya setelah `git pull`), lalu `npm install` lagi di folder app contoh. Kalau versi adapter naik, nama file `.tgz`-nya ikut berubah, dan `package.json` app contoh sudah menunjuk ke nama yang baru.
+
+Setelah itu, jalankan remote di satu terminal:
+
+```bash
+npx github:fadhelmurphy/xp build examples -y
+npx github:fadhelmurphy/xp serve               # http://localhost:4400
+```
+
+Lalu app contoh di terminal lain. **Masuk ke foldernya dulu**: `npm install examples-consumer/nuxt-app` dari root akan dibaca npm sebagai repo GitHub, bukan folder.
+
+```bash
+cd examples-consumer/nuxt-app      # atau examples-consumer/next-app
+npm install
+npm run dev                        # http://localhost:3000
+```
+
+Kalau app gagal dengan pesan `remote "ui" (http://localhost:4400) tidak bisa diakses`, padahal remote sudah jalan, kemungkinan remote dan app jalan di lingkungan yang berbeda. Contohnya remote di Windows (PowerShell atau Git Bash) dan app di WSL: keduanya punya `localhost` sendiri. Jalankan keduanya di lingkungan yang sama, atau arahkan app ke IP Windows dari dalam WSL:
+
+```bash
+XP_UI_URL=http://$(ip route show default | awk '{print $3}'):4400 npm run dev
+```
+
+Satu lagi: jangan campur `npm install` dari Windows dan dari WSL di folder yang sama. `node_modules` hasil install di satu sisi sering tidak jalan di sisi lain.
 
 ## xp dev
 
@@ -352,12 +395,14 @@ Beberapa hal yang perlu diketahui:
 Menjalankan contoh di `examples-consumer/next-app`:
 
 ```bash
+npm run pack:adapters                              # sekali, dari root repo
 npx github:fadhelmurphy/xp build examples -y && npx github:fadhelmurphy/xp serve   # terminal 1
-cd adapters/next && npm pack
-cd ../../examples-consumer/next-app && npm install
+cd examples-consumer/next-app && npm install
 npx next build && npx next start -p 3300           # terminal 2
 APP_URL=http://localhost:3300 npm run e2e          # terminal 3, dari root repo
 ```
+
+Langkah lengkapnya, termasuk kalau pakai WSL, ada di [Menjalankan app contoh](#menjalankan-app-contoh-nextjs-dan-nuxt).
 
 ## Nuxt
 
@@ -388,6 +433,7 @@ import PromoModal from "xp:ui/promo-modal";
 Sama seperti di Next.js: SSR, hydrate, tipe props (cek dengan `nuxi typecheck`), dan update tanpa rebuild. SSR-nya lewat `useAsyncData`, jadi HTML ikut di payload dan tidak dirender ulang di client.
 
 ```bash
+npm run pack:adapters                              # sekali, dari root repo
 cd examples-consumer/nuxt-app && npm install && npx nuxt build
 PORT=3400 node .output/server/index.mjs
 APP_URL=http://localhost:3400 npm run e2e          # dari root repo

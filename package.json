@@ -24,7 +24,8 @@
     "demo:gif": "node scripts/record-demo.mjs",
     "demo:terminal": "node scripts/record-terminal.mjs",
     "e2e:dev": "node tests/e2e/dev.mjs",
-    "e2e:remotes": "node tests/e2e/two-remotes.mjs"
+    "e2e:remotes": "node tests/e2e/two-remotes.mjs",
+    "pack:adapters": "node scripts/pack-adapters.mjs"
   },
   "dependencies": {
     "esbuild": "^0.28.2",
