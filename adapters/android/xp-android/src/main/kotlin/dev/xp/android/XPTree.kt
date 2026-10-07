@@ -19,6 +19,26 @@ class XPNode(val id: Int, val type: String, val createdAt: Int = 0) {
     @Suppress("UNCHECKED_CAST")
     fun style(): Map<String, Any?> = props["style"] as? Map<String, Any?> ?: emptyMap()
 
+    /**
+     * Style sesuai keadaan elemen: hoverStyle, lalu focusStyle, lalu pressedStyle ditimpa di atas
+     * style (urutannya sama dengan web). Diisi dari varian className hover:, focus:, active:.
+     */
+    @Suppress("UNCHECKED_CAST")
+    fun styleFor(pressed: Boolean = false, focused: Boolean = false, hovered: Boolean = false): Map<String, Any?> {
+        val layers = listOfNotNull(
+            "hoverStyle".takeIf { hovered },
+            "focusStyle".takeIf { focused },
+            "pressedStyle".takeIf { pressed },
+        ).mapNotNull { props[it] as? Map<String, Any?> }
+        if (layers.isEmpty()) return style()
+        val out = LinkedHashMap(style())
+        for (l in layers) out.putAll(l)
+        return out
+    }
+
+    /** true kalau node punya style untuk keadaan itu ("pressed", "focus", "hover"). */
+    fun hasStateStyle(state: String): Boolean = props["${state}Style"] is Map<*, *>
+
     @Suppress("UNCHECKED_CAST")
     fun entering(): XPEntering? = (props["entering"] as? Map<String, Any?>)?.let { XPEntering.parse(it) }
 }
@@ -111,3 +131,6 @@ class XPTree {
         return nodes.keys.filter { it !in reachable }
     }
 }
+
+/** Argumen XP.environment: ukuran layar (dp) dan mode gelap. */
+internal fun environmentJson(widthDp: Int, heightDp: Int, dark: Boolean): String = """{"width":$widthDp,"height":$heightDp,"dark":$dark}"""

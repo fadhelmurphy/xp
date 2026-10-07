@@ -3,6 +3,7 @@ package dev.xp.android
 import org.junit.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 class XPStyleTest {
     @Test
@@ -56,5 +57,78 @@ class XPStyleTest {
         assertEquals(300, s.transitionMs)
         assertEquals("ease-out", s.easing)
         assertEquals(0, XPStyle.parse(emptyMap()).transitionMs)
+    }
+}
+
+class XPStyleTailwindTest {
+    @Test
+    fun layoutKeys() {
+        val s = XPStyle.parse(
+            mapOf(
+                "display" to "grid", "gridColumns" to 3.0, "columnGap" to 8.0, "rowGap" to 4.0, "gap" to 2.0,
+                "position" to "absolute", "top" to 8.0, "left" to "50%", "zIndex" to 10.0, "overflow" to "hidden",
+                "marginLeft" to "auto", "aspectRatio" to 1.5, "height" to "100vh", "flexDirection" to "row-reverse",
+            ),
+        )
+        assertEquals("grid", s.display)
+        assertEquals(3, s.gridColumns)
+        assertEquals(8f, s.mainGap) // row → columnGap
+        assertTrue(s.absolute)
+        assertEquals(XPSize.Dp(8f), s.top)
+        assertEquals(XPSize.Percent(0.5f), s.left)
+        assertEquals(10f, s.zIndex)
+        assertTrue(s.clip)
+        assertEquals(setOf("start"), s.autoMargin)
+        assertEquals(0f, s.margin.start)
+        assertEquals(1.5f, s.aspectRatio)
+        assertEquals(XPSize.Screen(1f, vertical = true), s.height)
+        assertTrue(s.isRow && s.reverse)
+        assertTrue(XPStyle.parse(mapOf("display" to "none")).hidden)
+    }
+
+    @Test
+    fun boxKeys() {
+        val s = XPStyle.parse(
+            mapOf(
+                "borderRadius" to 4.0, "borderTopLeftRadius" to 8.0, "borderTopWidth" to 2.0, "borderStyle" to "dashed",
+                "boxShadow" to "0px 10px 15px -3px #2b7fff66, 0px 0px 0px 2px #ffffff99",
+                "backgroundImage" to "linear-gradient(to right, #2b7fff, #ffffff, #f6339a80)",
+                "scaleX" to 0.95, "translateY" to "-50%", "rotate" to -12.0, "animation" to "spin",
+                "dividerColor" to "#e5e7eb",
+            ),
+        )
+        assertEquals(XPCorners(8f, 4f, 4f, 4f), s.cornerRadii)
+        assertEquals(XPEdges(start = 0f, top = 2f, end = 0f, bottom = 0f), s.borderEdges)
+        assertTrue(s.hasBorder)
+        assertEquals("dashed", s.borderStyle)
+        assertEquals(XPShadow(0f, 10f, 15f, -3f, 0x662B7FFFL), s.shadows[0])
+        assertTrue(s.shadows[1].isRing)
+        assertEquals(XPGradient(90f, listOf(0xFF2B7FFFL, 0xFFFFFFFFL, 0x80F6339AL)), s.gradient)
+        assertEquals(0.95f, s.scaleX)
+        assertEquals(1f, s.scaleY)
+        assertEquals(XPSize.Percent(-0.5f), s.translateY)
+        assertEquals(-12f, s.rotate)
+        assertEquals("spin", s.animation)
+        assertEquals(1f, s.dividerWidth)
+        assertEquals(135f, XPStyle.parseGradient("linear-gradient(to bottom right, red, blue)")!!.angle)
+        assertEquals(45f, XPStyle.parseGradient("linear-gradient(45deg, red, blue)")!!.angle)
+    }
+
+    @Test
+    fun textKeys() {
+        val s = XPStyle.parse(
+            mapOf(
+                "fontStyle" to "italic", "fontFamily" to "monospace", "letterSpacing" to 0.8,
+                "textDecorationLine" to "underline", "textTransform" to "capitalize",
+                "whiteSpace" to "nowrap", "textOverflow" to "ellipsis", "lineClamp" to 2.0, "objectFit" to "contain",
+            ),
+        )
+        assertTrue(s.italic && s.noWrap && s.ellipsis)
+        assertEquals("monospace", s.fontFamily)
+        assertEquals(0.8f, s.letterSpacing)
+        assertEquals("underline", s.textDecoration)
+        assertEquals("Promo Akhir Tahun", s.transform("promo akhir tahun"))
+        assertEquals(2, s.lineClamp)
+        assertEquals("contain", s.objectFit)
     }
 }

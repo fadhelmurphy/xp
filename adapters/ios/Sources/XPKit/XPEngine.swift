@@ -1,3 +1,4 @@
+import CoreGraphics
 import Foundation
 import JavaScriptCore
 
@@ -36,6 +37,12 @@ public final class XPEngine {
     /// `snapshot`: hasil snapshot() dari engine sebelumnya (reload saat development).
     public func mount(_ propsJSON: String, snapshot: String = "null") async throws -> String {
         try await call("XP.mount(\(XPJSON.quote(propsJSON)), \(XPJSON.quote(snapshot)))")
+    }
+
+    /// Ukuran layar (pt) dan mode gelap, untuk varian className sm:, md:, dark: dan satuan vh/vw.
+    public func environment(screen: CGSize, dark: Bool) async throws -> String {
+        let json = environmentJSON(width: Double(screen.width), height: Double(screen.height), dark: dark)
+        return try await call("typeof XP.environment === 'function' ? XP.environment(\(XPJSON.quote(json))) : '[]'")
     }
 
     /// State useState komponen saat ini, untuk dipakai bundle versi baru.

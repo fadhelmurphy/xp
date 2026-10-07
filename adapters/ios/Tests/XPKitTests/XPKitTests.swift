@@ -84,6 +84,52 @@ final class XPTreeTests: XCTestCase {
         XCTAssertNil(XPDevEvents.parse(": ping"))
     }
 
+    func testStateStylesLayerOverStyle() throws {
+        let tree = XPTree()
+        try tree.applyBatches("""
+        [{"v":1,"ops":[["create",1,"Pressable"],["props",1,{"style":{"backgroundColor":"#2b7fff","padding":16},\
+        "hoverStyle":{"backgroundColor":"#155dfc"},"pressedStyle":{"backgroundColor":"#1447e6"}}],["children",0,[1]]]}]
+        """)
+        let n = try XCTUnwrap(tree.node(1))
+        XCTAssertTrue(n.hasStateStyle)
+        XCTAssertEqual(n.styleFor()["backgroundColor"] as? String, "#2b7fff")
+        XCTAssertEqual(n.styleFor(hovered: true)["backgroundColor"] as? String, "#155dfc")
+        XCTAssertEqual(n.styleFor(pressed: true, hovered: true)["backgroundColor"] as? String, "#1447e6")
+        XCTAssertEqual((n.styleFor(pressed: true)["padding"] as? NSNumber)?.intValue, 16)
+        XCTAssertEqual(environmentJSON(width: 390.4, height: 844, dark: true), #"{"width":390,"height":844,"dark":true}"#)
+    }
+
+    func testTailwindStyleKeys() {
+        let s = XPStyle.parse([
+            "display": "grid", "gridColumns": 3, "columnGap": 8, "rowGap": 4, "position": "absolute", "top": 8,
+            "left": "50%", "zIndex": 10, "overflow": "hidden", "marginLeft": "auto", "aspectRatio": 1.5, "height": "100vh",
+            "flexDirection": "row-reverse", "borderRadius": 4, "borderTopLeftRadius": 8, "borderTopWidth": 2,
+            "borderStyle": "dashed", "boxShadow": "0px 10px 15px -3px #2b7fff66, 0px 0px 0px 2px #ffffff99",
+            "backgroundImage": "linear-gradient(to right, #2b7fff, #ffffff)", "scaleX": 0.95, "translateY": "-50%",
+            "rotate": -12, "animation": "spin", "fontStyle": "italic", "fontFamily": "monospace", "letterSpacing": 0.8,
+            "textDecorationLine": "underline", "textTransform": "uppercase", "whiteSpace": "nowrap", "lineClamp": 2,
+        ])
+        XCTAssertEqual(s.display, "grid")
+        XCTAssertEqual(s.gridColumns, 3)
+        XCTAssertEqual(s.mainGap, 8) // row → columnGap
+        XCTAssertTrue(s.absolute && s.clip && s.reverse && s.isRow && s.italic && s.noWrap)
+        XCTAssertEqual(s.left, .percent(0.5))
+        XCTAssertEqual(s.autoMargin, ["leading"])
+        XCTAssertEqual(s.height, .screen(1, vertical: true))
+        XCTAssertEqual(s.cornerRadii, XPCorners(topLeading: 8, topTrailing: 4, bottomTrailing: 4, bottomLeading: 4))
+        XCTAssertEqual(s.borderEdges, XPEdges(top: 2, leading: 0, bottom: 0, trailing: 0))
+        XCTAssertEqual(s.shadows.first, XPShadow(x: 0, y: 10, blur: 15, spread: -3, color: 0x662B_7FFF))
+        XCTAssertTrue(s.shadows[1].isRing)
+        XCTAssertEqual(s.gradient, XPGradient(angle: 90, colors: [0xFF2B_7FFF, 0xFFFF_FFFF]))
+        XCTAssertEqual(s.translateY, .percent(-0.5))
+        XCTAssertEqual(s.rotate, -12)
+        XCTAssertEqual(s.animation, "spin")
+        XCTAssertEqual(s.transform("promo"), "PROMO")
+        XCTAssertEqual(s.lineClamp, 2)
+        XCTAssertEqual(XPStyle.parseGradient("linear-gradient(to bottom right, red, blue)")?.angle, 135)
+        XCTAssertEqual(XPSize.screen(0.5, vertical: true).points(of: 0, screen: CGSize(width: 390, height: 800)), 400)
+    }
+
     func testSwipeDirection() {
         XCTAssertEqual(XPGesture.direction(dx: -60, dy: 10), "left")
         XCTAssertEqual(XPGesture.direction(dx: 60, dy: -20), "right")

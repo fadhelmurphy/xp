@@ -64,6 +64,10 @@ class XPEngine private constructor(
 
     suspend fun unmount(): String = call("XP.unmount()")
 
+    /** Ukuran layar (dp) dan mode gelap, untuk varian className sm:, md:, dark: dan satuan vh/vw. */
+    suspend fun environment(widthDp: Int, heightDp: Int, dark: Boolean): String =
+        call("typeof XP.environment === 'function' ? XP.environment(${XPJson.quote(environmentJson(widthDp, heightDp, dark))}) : '[]'")
+
     /** Jalankan timer (setTimeout/setInterval) yang sudah jatuh tempo. */
     suspend fun tick(): String = call("typeof XP.tick === 'function' ? XP.tick() : '[]'")
 

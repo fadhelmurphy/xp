@@ -26,6 +26,23 @@ public final class XPNode {
 
     public var style: [String: Any] { props["style"] as? [String: Any] ?? [:] }
 
+    /// Style sesuai keadaan elemen: hoverStyle, lalu focusStyle, lalu pressedStyle ditimpa di atas
+    /// style (urutannya sama dengan web). Diisi dari varian className hover:, focus:, active:.
+    public func styleFor(pressed: Bool = false, focused: Bool = false, hovered: Bool = false) -> [String: Any] {
+        var out = style
+        for (on, key) in [(hovered, "hoverStyle"), (focused, "focusStyle"), (pressed, "pressedStyle")] where on {
+            if let layer = props[key] as? [String: Any] {
+                out.merge(layer) { _, new in new }
+            }
+        }
+        return out
+    }
+
+    /// Node punya pressedStyle / focusStyle / hoverStyle.
+    public var hasStateStyle: Bool {
+        props["pressedStyle"] is [String: Any] || props["focusStyle"] is [String: Any] || props["hoverStyle"] is [String: Any]
+    }
+
     public var testID: String? { string("testID") }
 
     public var entering: XPEntering? {
@@ -154,4 +171,9 @@ public final class XPTree {
         let reachable = Set(walk().map(\.id))
         return nodes.keys.filter { !reachable.contains($0) }.sorted()
     }
+}
+
+/// Argumen XP.environment: ukuran layar (pt) dan mode gelap.
+func environmentJSON(width: Double, height: Double, dark: Bool) -> String {
+    "{\"width\":\(Int(width.rounded())),\"height\":\(Int(height.rounded())),\"dark\":\(dark)}"
 }
