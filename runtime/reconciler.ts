@@ -1,4 +1,5 @@
 import { Fragment, isVNode, type ComponentFn, type Props, type VNode } from "./jsx-runtime";
+import { onEnvironmentChange } from "./environment";
 import { ROOT_ID } from "./protocol";
 
 /** Yang harus diimplementasikan setiap target (native bridge, DOM, SSR). */
@@ -348,9 +349,19 @@ export function createRoot(host: Host, opts: { effects?: boolean } = {}) {
     host, nextId: 1, dirty: new Set(), scheduled: false, flushId: 0, effects: [],
     runEffects: opts.effects ?? true, restore: null, adopt: null,
   };
+  // Lebar layar / mode gelap berubah melewati breakpoint: render ulang supaya className ikut.
+  let lastElement: unknown = null;
+  const stopEnv = onEnvironmentChange(() => {
+    if (lastElement === null) return;
+    root.flushId++;
+    container.children = reconcile(root, container.children, normalize(lastElement), container, 0, "");
+    syncChildren(root, container);
+    commit(root);
+  });
   return {
     /** `restore`: snapshot dari versi sebelumnya; state komponen di posisi yang sama dipakai lagi. */
     render(element: unknown, restore?: Snapshot | null, adopt?: Handover | null) {
+      lastElement = element;
       root.flushId++;
       root.restore = restore ?? null;
       root.adopt = adopt ?? null;
@@ -404,11 +415,15 @@ export function createRoot(host: Host, opts: { effects?: boolean } = {}) {
       };
       container.children.forEach(walk);
       container.children = [];
+      lastElement = null;
+      stopEnv();
       root.dirty.clear();
       root.effects = [];
       return out;
     },
     unmount() {
+      lastElement = null;
+      stopEnv();
       for (const c of container.children) unmount(root, c);
       container.children = [];
       syncChildren(root, container);

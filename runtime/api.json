@@ -12,6 +12,8 @@
       "TextInput",
       "View",
       "createElement",
+      "environment",
+      "registerBreakpoints",
       "useCallback",
       "useEffect",
       "useMemo",

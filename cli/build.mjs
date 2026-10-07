@@ -18,7 +18,9 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createPropsReader } from "./props.mjs";
 import { SIGNATURE_FILE, signManifest } from "./sign.mjs";
-import { detectKind, webBuildOptions } from "./web.mjs";
+import { classNamePlugin, webClassTable } from "./classname.mjs";
+import { xpClassTable } from "./tailwind-xp.mjs";
+import { buildWeb, detectKind } from "./web.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const RUNTIME = path.resolve(here, "..", "runtime");
@@ -79,9 +81,43 @@ const externalRuntime = {
   },
 };
 
+// CSS yang di-import komponen xp (tema Tailwind) sudah dipakai untuk tabel className saat build;
+// isinya tidak ikut bundle.
+const xpCssImports = {
+  name: "xp-css-imports",
+  setup(b) {
+    b.onLoad({ filter: /\.css$/ }, () => ({ contents: "", loader: "js" }));
+  },
+};
+
+const withClasses = (opts, table, native) => ({
+  ...opts,
+  plugins: [...(table ? [classNamePlugin(table, { runtimeDir: RUNTIME, native })] : []), xpCssImports, ...(opts.plugins ?? [])],
+});
+
+// CSS varian className: di HTML SSR sebagai <style> pertama; di browser dipindah ke <head>
+// sebelum hydrate (cara yang sama dengan komponen React/Vue/Svelte).
+function styleHelpers(entry, css) {
+  if (!css) return "const styleTag = () => \"\"; const hoistStyle = () => {};";
+  const id = JSON.stringify(`xp-${sha(entry).slice(0, 8)}`);
+  return `
+    const CSS = ${JSON.stringify(css)};
+    const ATTR = "data-xp-style";
+    const styleTag = () => "<style " + ATTR + '="' + ${id} + '">' + CSS + "</style>";
+    function hoistStyle(el) {
+      const inline = el.querySelector("style[" + ATTR + '="' + ${id} + '"]');
+      if (inline) inline.remove();
+      if (typeof document === "undefined" || document.querySelector("head style[" + ATTR + '="' + ${id} + '"]')) return;
+      const s = document.createElement("style");
+      s.setAttribute(ATTR, ${id});
+      s.textContent = CSS;
+      document.head.appendChild(s);
+    }`;
+}
+
 const xpBuilds = {
   // CJS untuk browser: hanya kode komponen. Runtime xp di-require dari file runtime bersama.
-  web: (entry) => ({
+  web: (entry, css = "") => ({
     ...xpCommon,
     alias: {},
     plugins: [externalRuntime],
@@ -93,13 +129,14 @@ const xpBuilds = {
         import { mount } from "@xp/runtime/hosts/dom";
         export const protocol = ${PROTOCOL_VERSION};
         export const framework = "xp";
-        export const render = (el, props, opts) => mount(el, C, props, opts);`,
+        ${styleHelpers(entry, css)}
+        export const render = (el, props, opts) => (hoistStyle(el), mount(el, C, props, opts));`,
       resolveDir: RUNTIME,
       loader: "tsx",
     },
   }),
   // CJS mandiri untuk server: renderHTML (SSR), tanpa kode DOM.
-  ssr: (entry) => ({
+  ssr: (entry, css = "") => ({
     ...xpCommon,
     format: "cjs",
     platform: "neutral",
@@ -109,7 +146,8 @@ const xpBuilds = {
         import { renderToString } from "@xp/runtime/hosts/html";
         export const protocol = ${PROTOCOL_VERSION};
         export const framework = "xp";
-        export const renderHTML = (props) => renderToString(C, props);`,
+        ${styleHelpers(entry, css)}
+        export const renderHTML = (props) => styleTag() + renderToString(C, props);`,
       resolveDir: RUNTIME,
       loader: "tsx",
     },
@@ -239,12 +277,14 @@ export async function runBuild({ srcDir, outDir, jobs, clean = false, projectDir
       written.push([record.types, props]);
 
       const warnings = [];
+      // className (Tailwind) → style, dihitung sekali untuk semua output komponen ini.
+      const classes = kind === "xp" ? await xpClassTable(file, { projectDir, runtimeDir: RUNTIME }) : null;
+      const web = kind === "xp" ? await webClassTable(classes, file, RUNTIME) : null;
       for (const out of outputs) {
-        const opts =
+        const result =
           kind === "xp"
-            ? xpBuilds[out](file)
-            : webBuildOptions({ kind, file, name, projectDir, side: out === "ssr" ? "ssr" : "client" });
-        const result = await build(opts);
+            ? await build(out === "native" ? withClasses(xpBuilds.native(file), classes, true) : withClasses(xpBuilds[out](file, web.css), web.table, false))
+            : await buildWeb({ kind, file, name, projectDir, side: out === "ssr" ? "ssr" : "client" });
         const code = result.outputFiles[0].text;
         const hash = sha(code);
         const fileName = `${name}.${out}.${hash.slice(0, 10)}.js`;

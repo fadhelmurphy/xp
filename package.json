@@ -1,6 +1,6 @@
 {
   "name": "xp",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Tulis komponen sekali (JSX/React/Vue/Svelte), build jadi bundle web dan native, muat lewat URL di web, iOS, dan Android.",
   "type": "module",
   "bin": {
@@ -25,18 +25,19 @@
     "demo:terminal": "node scripts/record-terminal.mjs",
     "e2e:dev": "node tests/e2e/dev.mjs",
     "e2e:remotes": "node tests/e2e/two-remotes.mjs",
+    "e2e:styling": "node tests/e2e/styling.mjs",
     "pack:adapters": "node scripts/pack-adapters.mjs"
   },
   "dependencies": {
+    "@clack/prompts": "^1.8.1",
     "esbuild": "^0.28.2",
-    "typescript": "^5.9.3",
-    "@clack/prompts": "^1.8.1"
+    "typescript": "^5.9.3"
   },
   "peerDependencies": {
     "react": ">=18",
     "react-dom": ">=18",
-    "vue": ">=3.3",
-    "svelte": ">=5"
+    "svelte": ">=5",
+    "vue": ">=3.3"
   },
   "peerDependenciesMeta": {
     "react": {
@@ -53,6 +54,9 @@
     }
   },
   "devDependencies": {
+    "@emotion/react": "^11.14.0",
+    "@emotion/styled": "^11.14.1",
+    "@tailwindcss/node": "^4.3.3",
     "@types/jsdom": "^30.0.0",
     "@types/node": "^22.20.4",
     "@types/react": "^19.3.0",
@@ -62,7 +66,9 @@
     "quickjs-emscripten": "^0.32.0",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
+    "styled-components": "^6.5.3",
     "svelte": "^5.57.1",
+    "tailwindcss": "^4.3.3",
     "tsx": "^4.23.15",
     "vue": "^3.5.43"
   },

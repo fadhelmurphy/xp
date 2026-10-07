@@ -1,12 +1,13 @@
 // Host browser: operasi → elemen DOM.
 import { jsx, type ComponentFn } from "../jsx-runtime";
 import { ROOT_ID } from "../protocol";
+import { setEnvironment } from "../environment";
 import { createRoot, HANDOVER_VERSION, TEXT, type Handover, type Host, type Snapshot } from "../reconciler";
 
 export { HANDOVER_VERSION };
 import { swipeDirection } from "./gesture";
 import { htmlAttrs } from "./html";
-import { cssText, styleToCss, TAGS } from "./web-style";
+import { cssText, dividerCss, KEYFRAMES, styleToCss, TAGS } from "./web-style";
 
 // Prop event → event DOM + cara mengambil argumennya.
 const EVENTS: Record<string, [string, (e: Event) => unknown[]]> = {
@@ -32,6 +33,11 @@ class DomHost implements Host {
   private children = new Map<number, number[]>();
   private attrs = new Map<number, string[]>();
   private handlers = new Map<string, Function>();
+  /** Keadaan elemen untuk hoverStyle / focusStyle / pressedStyle. */
+  private states = new Map<number, { hover?: boolean; focus?: boolean; pressed?: boolean }>();
+  /** Elemen yang sedang digeser (dragAxis): style ditulis ulang setelah kembali ke posisinya. */
+  private dragging = new Set<number>();
+  private parents = new Map<number, number>();
 
   constructor(root: HTMLElement) {
     this.nodes.set(ROOT_ID, root);
@@ -55,6 +61,31 @@ class DomHost implements Host {
   /** Pasang listener event ke elemen node `id` (elemen baru atau elemen hasil SSR). */
   private wire(id: number, el: HTMLElement) {
     let swiped = false;
+    const state = (k: "hover" | "focus" | "pressed", on: boolean) => {
+      if (this.detached) return;
+      const s = this.states.get(id) ?? {};
+      if (!!s[k] === on) return;
+      s[k] = on;
+      this.states.set(id, s);
+      if (this.props.get(id)?.[`${k}Style`]) this.paint(id);
+    };
+    el.addEventListener("pointerenter", (e) => e.pointerType === "mouse" && state("hover", true));
+    el.addEventListener("pointerleave", (e) => e.pointerType === "mouse" && state("hover", false));
+    el.addEventListener("focus", () => state("focus", true));
+    el.addEventListener("blur", () => state("focus", false));
+    el.addEventListener("pointerdown", (down) => {
+      if (!this.props.get(id)?.pressedStyle || this.props.get(id)?.disabled) return;
+      state("pressed", true);
+      const win = el.ownerDocument.defaultView!;
+      const release = (e: PointerEvent) => {
+        if (e.pointerId !== down.pointerId) return;
+        win.removeEventListener("pointerup", release as EventListener);
+        win.removeEventListener("pointercancel", release as EventListener);
+        state("pressed", false);
+      };
+      win.addEventListener("pointerup", release as EventListener);
+      win.addEventListener("pointercancel", release as EventListener);
+    });
     for (const [prop, [evt, args]] of Object.entries(EVENTS)) {
       el.addEventListener(evt, (e) => {
         if (this.detached) return;
@@ -91,6 +122,7 @@ class DomHost implements Host {
         if (!dragging && Math.abs(dx) + Math.abs(dy) < 4) return;
         if (!dragging) {
           dragging = true;
+          this.dragging.add(id);
           el.style.transition = "none";
         }
         el.style.transform = `${base.transform} translate(${dx}px, ${dy}px)`.trim();
@@ -104,7 +136,10 @@ class DomHost implements Host {
           // Kembali ke posisi semula, lalu style dikembalikan sesuai props.
           el.style.transition = "transform 200ms ease-out";
           el.style.transform = base.transform;
-          setTimeout(() => this.nodes.get(id) === el && this.paint(id), 220);
+          setTimeout(() => {
+            this.dragging.delete(id);
+            if (this.nodes.get(id) === el) this.paint(id);
+          }, 220);
         }
         if (cancelled) return;
         const dir = swipeDirection(e.clientX - from.x, e.clientY - from.y);
@@ -122,14 +157,21 @@ class DomHost implements Host {
     });
   }
 
+  private hasDivider(id: number) {
+    const st = this.props.get(id)?.style;
+    return !!st && (st.dividerWidth != null || st.dividerColor != null);
+  }
+
   setProps(id: number, changed: Record<string, unknown>) {
     const p = this.props.get(id)!;
+    const divider = this.hasDivider(id);
     for (const [k, v] of Object.entries(changed)) {
       if (typeof v === "function") this.handlers.set(`${id}:${k}`, v);
       else if (v === undefined) this.handlers.delete(`${id}:${k}`);
       v === undefined ? delete p[k] : (p[k] = v);
     }
     this.paint(id);
+    if (divider || this.hasDivider(id)) for (const c of this.children.get(id) ?? []) this.paint(c);
     const el = this.nodes.get(id) as HTMLElement;
     if (this.fresh.delete(id) && p.entering) this.enter(el, p.entering as EnteringProp);
   }
@@ -146,8 +188,20 @@ class DomHost implements Host {
     }
     const el = node as HTMLElement;
     // Sama persis dengan atribut hasil SSR, jadi hydrate tidak menulis ulang apa pun.
-    const style = cssText(styleToCss(type, p.style, p));
-    if (el.getAttribute("style") !== style) el.setAttribute("style", style);
+    // Elemen yang sedang digeser: style (transform) dibiarkan sampai kembali ke posisinya.
+    if (!this.dragging.has(id)) {
+      const st = this.states.get(id);
+      let merged = p.style;
+      if (st?.hover && p.hoverStyle) merged = { ...merged, ...p.hoverStyle };
+      if (st?.focus && p.focusStyle) merged = { ...merged, ...p.focusStyle };
+      if (st?.pressed && p.pressedStyle) merged = { ...merged, ...p.pressedStyle };
+      const parent = this.parents.get(id);
+      const siblings = parent === undefined ? [] : this.children.get(parent) ?? [];
+      const css = { ...styleToCss(type, merged, p), ...dividerCss(this.props.get(parent!)?.style, siblings.indexOf(id), siblings.length) };
+      const style = cssText(css);
+      if (el.getAttribute("style") !== style) el.setAttribute("style", style);
+      if (merged?.animation && merged.animation !== "none") ensureKeyframes(el.ownerDocument);
+    }
     const next = htmlAttrs(type, p);
     for (const k of this.attrs.get(id) ?? []) if (!(k in next)) el.removeAttribute(k);
     for (const [k, v] of Object.entries(next)) {
@@ -240,7 +294,11 @@ class DomHost implements Host {
   }
 
   setChildren(id: number, children: number[]) {
+    const before = this.children.get(id);
     this.children.set(id, children);
+    for (const c of children) this.parents.set(c, id);
+    // divide-x/y: anak terakhir tanpa garis, jadi gambar ulang anak-anak kalau urutannya berubah.
+    if (this.hasDivider(id) && before?.join() !== children.join()) for (const c of children) this.paint(c);
     if (this.detached) return;
     const parent = this.nodes.get(id)!;
     const wanted = children.map((c) => this.nodes.get(c)!);
@@ -258,6 +316,9 @@ class DomHost implements Host {
     this.types.delete(id);
     this.children.delete(id);
     this.attrs.delete(id);
+    this.states.delete(id);
+    this.dragging.delete(id);
+    this.parents.delete(id);
     for (const k of this.handlers.keys()) if (k.startsWith(`${id}:`)) this.handlers.delete(k);
   }
 
@@ -269,12 +330,35 @@ class DomHost implements Host {
  * props yang sama, elemen itu dipakai apa adanya (hydration): tidak ada node yang dibuat ulang.
  * Kalau isinya tidak cocok, isinya diganti hasil render client.
  */
+/** @keyframes animate-* dipasang sekali per halaman. */
+function ensureKeyframes(doc: Document) {
+  if (doc.querySelector("style[data-xp-keyframes]")) return;
+  const s = doc.createElement("style");
+  s.setAttribute("data-xp-keyframes", "");
+  s.textContent = KEYFRAMES;
+  doc.head.appendChild(s);
+}
+
+// Lebar layar dan mode gelap browser → environment() (dipakai varian className dengan keadaan).
+let watchingEnvironment = false;
+function watchEnvironment() {
+  if (typeof window === "undefined") return;
+  const dark = typeof matchMedia === "function" ? matchMedia("(prefers-color-scheme: dark)") : null;
+  const read = () => setEnvironment({ width: window.innerWidth, height: window.innerHeight, dark: !!dark?.matches });
+  read();
+  if (watchingEnvironment) return;
+  watchingEnvironment = true;
+  window.addEventListener("resize", read);
+  dark?.addEventListener?.("change", read);
+}
+
 export function mount(
   container: HTMLElement,
   Component: ComponentFn,
   props: Record<string, unknown> = {},
   opts: { restore?: Snapshot | null; adopt?: Handover | null } = {},
 ) {
+  watchEnvironment();
   const staging = document.createElement(container.tagName);
   const host = new DomHost(staging);
   const root = createRoot(host);

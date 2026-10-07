@@ -21,6 +21,7 @@ npx github:fadhelmurphy/xp build src -t web    # langsung, tanpa pertanyaan
 - [Signing](#signing)
 - [Komponen @xp/runtime](#komponen-xpruntime)
 - [Komponen React, Vue, Svelte](#komponen-react-vue-svelte)
+- [Styling dan Tailwind](#styling-dan-tailwind)
 - [Contoh](#contoh)
 - [Next.js](#nextjs)
 - [Nuxt](#nuxt)
@@ -231,7 +232,7 @@ export default function PromoModal({ title }: { title: string }) {
 
 Tidak perlu `import React`. Hooks yang tersedia: `useState`, `useEffect`, `useMemo`, `useCallback`, `useRef`. `setTimeout` dan `setInterval` juga jalan di Android dan iOS.
 
-Elemen yang bisa dipakai hanya `View`, `Text`, `Image`, `Pressable`, `ScrollView`, `TextInput`, dan `Modal`. Tag HTML akan ditolak TypeScript. Styling lewat prop `style`.
+Elemen yang bisa dipakai hanya `View`, `Text`, `Image`, `Pressable`, `ScrollView`, `TextInput`, dan `Modal`. Tag HTML akan ditolak TypeScript. Styling lewat prop `style` atau `className` (Tailwind), lihat [Styling dan Tailwind](#styling-dan-tailwind).
 
 Penjelasan lengkap setiap primitive, props, hooks, dan style ada di [docs/runtime.md](docs/runtime.md).
 
@@ -241,7 +242,7 @@ Di device tidak ada `document`, `window`, `fetch`, atau `Intl`. Kalau bundle nat
 
 Komponen cukup menentukan nilai akhirnya, animasinya dijalankan oleh platform masing-masing (CSS transition di web, `animate*AsState` di Android, `.animation` di iOS).
 
-Transisi saat style berubah. Yang bisa dianimasikan: `backgroundColor`, `opacity`, `width`, `height`, `borderColor`, `color`.
+Transisi saat style berubah. Yang bisa dianimasikan: `backgroundColor`, `opacity`, `width`, `height`, `borderColor`, `color`, dan transform (`scaleX`, `scaleY`, `translateX`, `translateY`, `rotate`).
 
 ```tsx
 <View style={{
@@ -312,6 +313,24 @@ const value = ref(0);
 ![React, Vue, dan Svelte di satu app Next.js](docs/demo-frameworks.gif)
 
 Di app konsumen cara pakainya sama dengan komponen lain: `import LikeButton from "xp:ui/like-button"`. Server merender HTML pakai bundle `ssr`, lalu browser meng-hydrate pakai bundle `web`. CSS ikut di HTML dan dipindah ke `<head>` saat hydrate. Props harus bisa di-serialize ke JSON.
+
+## Styling dan Tailwind
+
+Komponen React, Vue, dan Svelte bisa memakai CSS biasa, CSS modules, Tailwind, emotion, styled-components, atau library UI seperti MUI. CSS-nya ikut bundle, ditulis di HTML saat SSR, lalu dipindah ke `<head>` saat hydrate.
+
+Komponen `@xp/runtime` bisa memakai `className` berisi class Tailwind. Saat build, Tailwind mengompilasi class-nya (termasuk `@theme` proyek), lalu hasilnya diubah menjadi `style`, jadi tampilannya sama di web, Android, dan iOS:
+
+```tsx
+<View className="flex-row items-center gap-2 p-4 md:p-6 bg-white dark:bg-gray-900 rounded-xl shadow-md">
+  <Pressable className="px-4 py-2 rounded-full bg-blue-600 active:scale-95 transition-transform">
+    <Text className="text-white font-semibold">Beli</Text>
+  </Pressable>
+</View>
+```
+
+Varian `sm:` sampai `2xl:`, `dark:`, `hover:`, `active:`, `focus:`, dan `disabled:` jalan di semua platform. Di web, varian ditulis sebagai CSS asli sehingga HTML hasil SSR sudah benar sebelum JavaScript jalan. Class yang tidak bisa dijalankan di device (misalnya `blur-sm`) membuat build gagal dengan pesan yang menyebut file dan barisnya.
+
+Tailwind perlu dipasang di proyek komponen: `npm i -D tailwindcss @tailwindcss/node`. Daftar lengkap class dan varian yang didukung ada di [docs/styling.md](docs/styling.md).
 
 ## Contoh
 
@@ -575,11 +594,14 @@ Yang sudah dites:
 - Browser menolak bundle web yang hash-nya tidak cocok dengan manifest.
 - Pindah runtime di halaman yang sama: elemen DOM, `useState`, `useRef`, `useMemo`, dan effect yang sedang jalan (interval) tetap, dan cleanup effect hanya jalan sekali saat komponen benar-benar dilepas.
 - Signing: tanda tangan dari Node diverifikasi WebCrypto, Next.js (manifest yang diubah ditolak), dan Kotlin lewat kotlinc.
+- Styling komponen web: CSS biasa, CSS modules, Tailwind (termasuk `@apply` di Vue dan Svelte), emotion, styled-components, dan MUI, dari SSR sampai hydrate di jsdom dan Chromium.
+- `className` Tailwind di komponen xp: hasil SSR dan CSS varian di jsdom dan Chromium (lebar layar dan mode gelap), hasil style di bundle native (QuickJS) termasuk perubahan lebar layar, mode gelap, dan tinggi layar.
 
 Yang belum:
 
 - SDK Android: bagian tree, style, JSON, arah swipe, event `xp dev`, dan verifikasi tanda tangan sudah dites dengan kotlinc. Bagian Compose (termasuk timer, swipe, drag, dan reload `live`) belum pernah dikompilasi atau dijalankan di emulator.
 - SDK iOS: kode Swift belum dikompilasi. Jalankan `swift test` di Mac.
+- Tampilan style baru di Android dan iOS (posisi absolut, grid, shadow, gradien, border per sisi, transform, animasi berulang, style saat ditekan) belum dilihat di emulator; parsing style-nya sudah dites dengan kotlinc.
 - Belum ada GIF demo untuk Android dan iOS.
 - Layout di mobile belum memakai Yoga, jadi hasilnya bisa sedikit berbeda dari web.
 - `dragAxis` di Android (Compose) dan iOS (SwiftUI) belum pernah dijalankan; logika sumbunya saja yang dites.

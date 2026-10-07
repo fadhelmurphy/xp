@@ -40,7 +40,7 @@ Simpan di `src/counter.tsx`, lalu `npx github:fadhelmurphy/xp build`. Tidak perl
 | `TextInput` | `value`, `placeholder`, `onChangeText`, `secure`, `style` | `input` | `BasicTextField` | `TextField` / `SecureField` |
 | `Modal` | `visible`, `onRequestClose`, `style`, `children` | overlay | `Dialog` | `.sheet` |
 
-Semua primitive juga menerima `testID` (untuk tes) dan `entering` (animasi masuk, lihat [Animasi](#animasi)).
+Semua primitive juga menerima `className` (class Tailwind, lihat [styling.md](styling.md)), `pressedStyle` / `hoverStyle` / `focusStyle` (lihat [Style](#style)), `testID` (untuk tes), dan `entering` (animasi masuk, lihat [Animasi](#animasi)).
 
 ### View
 
@@ -187,16 +187,20 @@ Beri `key` pada elemen hasil `map`, supaya state tiap item tidak tertukar saat u
 
 ## Style
 
-Styling hanya lewat prop `style`, berupa object. Angka berarti pixel (dp di Android, pt di iOS).
+Styling lewat prop `style`, berupa object, atau `className` berisi class Tailwind yang diubah menjadi `style` saat build (lihat [styling.md](styling.md)). Angka berarti pixel (dp di Android, pt di iOS).
 
 | Kelompok | Properti |
 |---|---|
-| Layout | `flex`, `flexDirection` (`row`/`column`), `flexGrow`, `flexShrink`, `flexWrap`, `justifyContent`, `alignItems`, `alignSelf`, `gap` |
-| Ukuran | `width`, `height` (angka atau `"50%"`), `minWidth`, `maxWidth`, `minHeight` |
-| Jarak | `padding`, `paddingHorizontal`, `paddingVertical`, `margin`, `marginHorizontal`, `marginVertical` |
-| Tampilan | `backgroundColor`, `borderRadius`, `borderWidth`, `borderColor`, `opacity` |
-| Teks | `color`, `fontSize`, `fontWeight` (`"400"` sampai `"700"`), `lineHeight`, `textAlign` |
-| Transisi | `transitionDuration` (ms), `transitionTimingFunction` |
+| Layout | `display` (`"flex"`, `"none"`, `"grid"`), `flex`, `flexDirection` (termasuk `*-reverse`), `flexGrow`, `flexShrink`, `flexWrap`, `justifyContent`, `alignItems`, `alignSelf`, `gap`, `columnGap`, `rowGap`, `gridColumns`, `gridColumnSpan` |
+| Posisi | `position` (`"relative"` / `"absolute"`, relatif ke parent langsung), `top`, `right`, `bottom`, `left`, `zIndex`, `overflow` (`"hidden"`) |
+| Ukuran | `width`, `height`, `minWidth`, `maxWidth`, `minHeight`, `maxHeight` (angka, `"50%"`, atau satuan layar `"100vh"` / `"100vw"`), `aspectRatio` |
+| Jarak | `padding*`, `margin*` (per sisi juga; margin boleh `"auto"`) |
+| Tampilan | `backgroundColor`, `backgroundImage` (gradien linear), `borderRadius` (juga per pojok), `borderWidth` (juga per sisi), `borderColor`, `borderStyle`, `boxShadow`, `dividerWidth`, `dividerColor`, `opacity` |
+| Transform | `scaleX`, `scaleY`, `translateX`, `translateY` (angka atau persen ukuran sendiri), `rotate` (derajat) |
+| Teks | `color`, `fontSize`, `fontWeight`, `fontStyle`, `fontFamily`, `lineHeight`, `letterSpacing`, `textAlign`, `textDecorationLine`, `textTransform`, `whiteSpace`, `textOverflow`, `lineClamp` |
+| Gambar | `objectFit` |
+| Animasi | `transitionDuration` (ms), `transitionTimingFunction`, `animation` (`"spin"`, `"pulse"`, `"bounce"`, `"ping"`) |
+| Khusus web | `cursor`, `userSelect`, `outlineStyle`, `pointerEvents` (juga iOS) |
 
 Tulis warna sebagai hex (`"#1F6FEB"`, `"#1F6FEB80"` untuk transparan) supaya hasilnya sama di semua platform. Properti di luar daftar ini ditolak TypeScript.
 
@@ -208,11 +212,20 @@ const tombol = { padding: 12, borderRadius: 8, alignItems: "center" } as const;
 <Pressable style={{ ...tombol, backgroundColor: "#1F6FEB" }}>…</Pressable>
 ```
 
+Style saat elemen ditekan, disorot pointer, atau sedang diketik:
+
+```tsx
+<Pressable style={{ backgroundColor: "#1F6FEB" }} pressedStyle={{ opacity: 0.8 }} hoverStyle={{ backgroundColor: "#1A5FCC" }}>…</Pressable>
+<TextInput style={{ borderWidth: 1, borderColor: "#D0D7DE" }} focusStyle={{ borderColor: "#1F6FEB" }} />
+```
+
+Ukuran layar dan mode gelap bisa dibaca langsung dengan `environment()` (`{ width, height, dark }`). Komponen yang memakai varian `md:`/`dark:` dari `className` dirender ulang otomatis saat nilainya berubah.
+
 ## Animasi
 
 Komponen cukup menentukan nilai akhirnya. Animasinya dijalankan oleh platform (CSS transition di web, `animate*AsState` di Android, `.animation` di iOS).
 
-Transisi saat style berubah. Yang bisa dianimasikan: `backgroundColor`, `opacity`, `width`, `height`, `borderColor`, `color`.
+Transisi saat style berubah. Yang bisa dianimasikan: `backgroundColor`, `opacity`, `width`, `height`, `borderColor`, `color`, dan transform (`scaleX`, `scaleY`, `translateX`, `translateY`, `rotate`).
 
 ```tsx
 <View style={{ width: aktif ? 18 : 8, backgroundColor: aktif ? "#1F6FEB" : "#D0D7DE", transitionDuration: 250 }} />

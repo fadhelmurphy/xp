@@ -8,11 +8,13 @@
 //
 // SDK → JS: XP.mount(propsJson), XP.update(propsJson), XP.dispatch(handlerKey, argsJson), XP.unmount()
 // Reload (dev): XP.snapshot() → JSON state, lalu XP.mount(propsJson, snapshotJson) di bundle baru.
+// Layar: XP.environment(json) → lebar layar dan mode gelap (varian className sm:, md:, dark:).
 // Timer: XP.nextTimer() → ms sampai timer berikutnya (-1 = tidak ada), XP.tick() → jalankan yang jatuh tempo.
 import { nextTimerDelay, runDueTimers } from "./timers";
 import { jsx, type ComponentFn } from "../jsx-runtime";
 import { PROTOCOL_VERSION, type Batch, type Op } from "../protocol";
 import { createRoot, type Host } from "../reconciler";
+import { setEnvironment } from "../environment";
 
 type Bridge = { send(batchJson: string): void };
 
@@ -119,6 +121,11 @@ export function installNative(Component: ComponentFn) {
     },
     nextTimer() {
       return nextTimerDelay();
+    },
+    /** Lebar layar (dp/pt) dan mode gelap: `{"width":390,"dark":false}`. Panggil sebelum mount dan saat berubah. */
+    environment(json = "{}") {
+      setEnvironment(JSON.parse(json));
+      return done();
     },
   };
 }

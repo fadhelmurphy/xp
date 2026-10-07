@@ -2,7 +2,7 @@
 import { jsx, type ComponentFn } from "../jsx-runtime";
 import { ROOT_ID } from "../protocol";
 import { createRoot, TEXT, type Host } from "../reconciler";
-import { cssText, styleToCss, TAGS } from "./web-style";
+import { cssText, dividerCss, styleToCss, TAGS } from "./web-style";
 
 type MemNode = { type: string; props: Record<string, any>; children: number[] };
 
@@ -31,6 +31,7 @@ const esc = (s: string) =>
 export function htmlAttrs(type: string, p: Record<string, any>): Record<string, string> {
   const a: Record<string, string> = {};
   if (p.testID) a["data-testid"] = p.testID;
+  if (p.__xpClass) a.class = p.__xpClass; // varian layar dari className (CSS @media)
   if (type === "Image") {
     a.src = p.src ?? "";
     a.alt = p.alt ?? "";
@@ -52,15 +53,15 @@ export function htmlAttrs(type: string, p: Record<string, any>): Record<string, 
   return a;
 }
 
-function serialize(host: MemoryHost, id: number): string {
+function serialize(host: MemoryHost, id: number, divider: Record<string, string> = {}): string {
   const n = host.nodes.get(id)!;
   if (n.type === TEXT) return esc(String(n.props.value ?? ""));
-  const inner = n.children.map((c) => serialize(host, c)).join("");
+  const inner = n.children.map((c, i) => serialize(host, c, dividerCss(n.props.style, i, n.children.length))).join("");
   if (n.type === "#root") return inner;
 
   const tag = TAGS[n.type];
   if (!tag) throw new Error(`Primitive tidak dikenal: ${n.type}`);
-  const attrs = { ...htmlAttrs(n.type, n.props), style: cssText(styleToCss(n.type, n.props.style, n.props)) };
+  const attrs = { ...htmlAttrs(n.type, n.props), style: cssText({ ...styleToCss(n.type, n.props.style, n.props), ...divider }) };
   const attrText = Object.entries(attrs).map(([k, v]) => ` ${k}="${esc(v)}"`).join("");
   return tag === "img" || tag === "input" ? `<${tag}${attrText}>` : `<${tag}${attrText}>${inner}</${tag}>`;
 }
