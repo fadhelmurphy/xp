@@ -46,6 +46,7 @@ export function htmlAttrs(type: string, p: Record<string, any>): Record<string, 
     if (p.value != null) a.value = String(p.value);
     if (p.placeholder) a.placeholder = p.placeholder;
   }
+  if (type === "NativeView") a["data-xp-native"] = String(p.name ?? ""); // di web: tempat pengganti (children)
   if (type === "Modal") {
     a.role = "dialog";
     a["aria-modal"] = "true";

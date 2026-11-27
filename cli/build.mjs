@@ -26,7 +26,7 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 const RUNTIME = path.resolve(here, "..", "runtime");
 export const PROTOCOL_VERSION = 1;
 export const TARGETS = ["auto", "web", "crossplatform"];
-const PRIMITIVES = ["View", "Text", "Image", "Pressable", "ScrollView", "TextInput", "Modal"];
+const PRIMITIVES = ["View", "Text", "Image", "Pressable", "ScrollView", "TextInput", "Modal", "NativeView"];
 // API yang tidak ada di QuickJS/JavaScriptCore di device. Pemakaian di bundle native = peringatan.
 const NOT_ON_DEVICE = ["document", "window", "localStorage", "Intl", "fetch", "XMLHttpRequest"];
 const COMPONENT_FILE = /\.(tsx|jsx|vue|svelte)$/;
@@ -212,13 +212,16 @@ const sha = (s) => createHash("sha256").update(s).digest("hex");
 
 async function primitivesUsed(metafile) {
   const used = new Set();
+  const natives = new Set();
   for (const input of Object.keys(metafile.inputs)) {
     const abs = path.resolve(input);
     if (abs.startsWith(RUNTIME) || input.startsWith("<stdin>")) continue;
     const src = await readFile(abs, "utf8").catch(() => "");
     for (const p of PRIMITIVES) if (new RegExp(`<${p}[\\s/>]`).test(src)) used.add(p);
+    // <NativeView name="map"> → nama view yang harus didaftarkan app
+    for (const m of src.matchAll(/<NativeView\b[^>]*?\bname=(?:"([^"]+)"|'([^']+)'|\{\s*["'`]([^"'`]+)["'`]\s*\})/g)) natives.add(m[1] ?? m[2] ?? m[3]);
   }
-  return [...used].sort();
+  return { primitives: [...used].sort(), nativeViews: [...natives].sort() };
 }
 
 function formatError(e) {
@@ -296,7 +299,11 @@ export async function runBuild({ srcDir, outDir, jobs, clean = false, projectDir
         }
         for (const w of result.warnings ?? []) warnings.push(w.text);
         if (out === "native") {
-          record.primitives = await primitivesUsed(result.metafile);
+          const used = await primitivesUsed(result.metafile);
+          record.primitives = used.primitives;
+          // View native yang perlu didaftarkan app (XPView nativeViews), kalau ada.
+          if (used.nativeViews.length) record.nativeViews = used.nativeViews;
+          else delete record.nativeViews;
           const bad = NOT_ON_DEVICE.filter((g) => new RegExp(`(^|[^.\\w$])${g}\\b`).test(code));
           if (bad.length) warnings.push(`memakai ${bad.join(", ")} yang tidak ada di device`);
         }

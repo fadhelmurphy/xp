@@ -16,6 +16,7 @@ Parameter lain:
 
 - `publicKey`: hanya terima manifest yang ditandatangani kunci ini (`xp keygen`, `xp build --sign`).
 - `live`: untuk development. Sambung ke `xp dev` dan muat ulang setiap build baru, state `useState` dibawa.
+- `nativeViews`: view native milik app yang bisa dipakai komponen lewat `<NativeView name="...">` (peta, video, kalender, custom view). Lihat [NativeView](../../docs/runtime.md#nativeview).
 
 ```swift
 #if DEBUG
@@ -48,6 +49,7 @@ Yang seharusnya terlihat:
 - Kartu **Kelas IELTS**.
 - Tap **Lihat detail** membuka **sheet iOS native**, yang bisa ditutup dengan swipe ke bawah (`onRequestClose`).
 - Tombol **+ / −** mengubah jumlah peserta, total dihitung, dan muncul teks "Kuota penuh". Semua logika ini jalan di JavaScriptCore.
+- Kartu **Pilih jadwal kelas** berisi `UIDatePicker` yang didaftarkan app lewat `nativeViews`. Pilih tanggal, maka komponen menampilkan "Jadwal: …". Contoh `NativeView`: view native milik app di dalam komponen xp.
 - Ubah teks di `examples/promo-modal.tsx`, jalankan `npx github:fadhelmurphy/xp build examples -y`, lalu tap **Muat ulang dari URL**. Teksnya berubah tanpa build ulang app.
 
 **Bukti tidak memakai WebView:** di Xcode buka *Debug View Hierarchy*. Yang muncul adalah view SwiftUI (`Text`, `Button`, sheet), bukan `WKWebView`.
@@ -75,6 +77,7 @@ Fixture diperbarui dari root repo dengan `npm test && npm run sync-fixtures`.
 | `TextInput` | `TextField` / `SecureField` |
 | `Image` | `AsyncImage` |
 | `Modal` | `.sheet` (detent medium/large) |
+| `NativeView` | view yang didaftarkan app di `nativeViews` (mis. `UIViewRepresentable`) |
 
 Animasi: `transitionDuration` di style → `.animation(_:value:)` pada nilai yang berubah; prop `entering` → `opacity` + `offset` yang dianimasikan saat view muncul, hanya untuk node yang muncul setelah mount.
 

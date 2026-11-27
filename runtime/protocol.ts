@@ -14,6 +14,7 @@ export const PRIMITIVES = [
   "ScrollView",
   "TextInput",
   "Modal",
+  "NativeView",
   "#text",
 ] as const;
 export type Primitive = (typeof PRIMITIVES)[number];
@@ -35,5 +36,6 @@ export type Batch = { v: number; ops: Op[] };
 //   XP.mount(propsJson, snapshotJson?) / XP.update(propsJson) / XP.unmount()
 //   XP.nextTimer() → ms sampai timer berikutnya (-1 = tidak ada); XP.tick() → jalankan timer yang jatuh tempo
 //   XP.snapshot() → JSON state useState, untuk XP.mount di bundle baru (reload saat development)
-// Event bawaan: onPress(), onChangeText(text), onRequestClose(), onSwipe("left" | "right" | "up" | "down")
+// Event bawaan: onPress(), onChangeText(text), onRequestClose(), onSwipe("left" | "right" | "up" | "down"),
+//   onEvent(event, data) dari NativeView
 // Prop dragAxis ("x" | "y"): host menggeser node mengikuti jari tanpa memanggil JS.

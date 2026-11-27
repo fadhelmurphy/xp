@@ -39,6 +39,7 @@ Simpan di `src/counter.tsx`, lalu `npx github:fadhelmurphy/xp build`. Tidak perl
 | `ScrollView` | `horizontal`, `style`, `children` | `div` + overflow | `verticalScroll` / `horizontalScroll` | `ScrollView` |
 | `TextInput` | `value`, `placeholder`, `onChangeText`, `secure`, `style` | `input` | `BasicTextField` | `TextField` / `SecureField` |
 | `Modal` | `visible`, `onRequestClose`, `style`, `children` | overlay | `Dialog` | `.sheet` |
+| `NativeView` | `name`, `props`, `onEvent`, `style`, `children` | `div` berisi children | view yang didaftarkan app | view yang didaftarkan app |
 
 Semua primitive juga menerima `className` (class Tailwind, lihat [styling.md](styling.md)), `pressedStyle` / `hoverStyle` / `focusStyle` (lihat [Style](#style)), `testID` (untuk tes), dan `entering` (animasi masuk, lihat [Animasi](#animasi)).
 
@@ -116,6 +117,52 @@ const [open, setOpen] = useState(false);
   </View>
 </Modal>
 ```
+
+### NativeView
+
+Memakai view native milik app di dalam komponen: peta, video player, kamera, kalender, atau custom view yang sudah ada. Komponen hanya menyebut nama view-nya; app yang mendaftarkan view native dengan nama itu di `XPView`. Kode native-nya tetap di app, bundle JS tidak berubah.
+
+```tsx
+const [date, setDate] = useState<string | null>(null);
+
+<NativeView
+  name="calendar"
+  props={{ minDate: Date.now() }}
+  onEvent={(event, data) => event === "select" && setDate(String(data))}
+  style={{ height: 320 }}
+>
+  <Text>Kalender tersedia di aplikasi.</Text>
+</NativeView>
+```
+
+- `props`: data untuk view native, harus bisa jadi JSON. Setiap kali berubah, view native menerima nilai baru.
+- `onEvent(event, data)`: dipanggil saat view native memanggil `emit(event, data)`.
+- `style`: ukuran, margin, latar, dan sudut dipasang oleh xp di sekeliling view native.
+- `children`: tampil di web, dan di app yang tidak mendaftarkan nama itu.
+
+Mendaftarkan view di Android:
+
+```kotlin
+val calendar: XPNativeView = {
+    AndroidView(
+        factory = { CalendarView(it) },
+        update = { view -> view.setOnDateChangeListener { _, y, m, d -> emit("select", "$y-${m + 1}-$d") } },
+        modifier = modifier,
+    )
+}
+
+XPView(base, "jadwal-kelas", nativeViews = mapOf("calendar" to calendar))
+```
+
+Di iOS:
+
+```swift
+XPView(base: base, name: "jadwal-kelas", nativeViews: [
+    "calendar": { ctx in AnyView(Kalender(ctx: ctx)) }, // UIViewRepresentable, panggil ctx.emit("select", ...)
+])
+```
+
+`xp build` mencatat nama view yang dipakai setiap komponen di `manifest.json` (`nativeViews`), supaya terlihat view apa saja yang harus didaftarkan app. Contoh lengkapnya ada di [`examples/jadwal-kelas.tsx`](../examples/jadwal-kelas.tsx), dengan app demo Android dan iOS yang mendaftarkan kalender bawaan masing-masing.
 
 ## Hooks
 

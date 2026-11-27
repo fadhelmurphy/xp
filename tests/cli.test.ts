@@ -18,18 +18,18 @@ const run = (...args: string[]) => {
 
 test("deteksi jenis komponen", async () => {
   const kinds = Object.fromEntries((await discover(path.resolve("examples"))).map((c: any) => [c.name, c.kind]));
-  assert.deepEqual(kinds, { "faq-list": "svelte", "like-button": "react", "promo-modal": "xp", "promo-slider": "xp", "rating-stars": "vue" });
+  assert.deepEqual(kinds, { "faq-list": "svelte", "jadwal-kelas": "xp", "like-button": "react", "promo-modal": "xp", "promo-slider": "xp", "rating-stars": "vue" });
 });
 
 test("rencana target", async () => {
   const all = await discover(path.resolve("examples"));
   const outputs = (t: string) => Object.fromEntries(plan(all, t).jobs.map((j: any) => [j.name, j.outputs.join("+")]));
   assert.deepEqual(outputs("auto"), {
-    "faq-list": "web+ssr", "like-button": "web+ssr", "promo-modal": "web+ssr+native", "promo-slider": "web+ssr+native", "rating-stars": "web+ssr",
+    "faq-list": "web+ssr", "jadwal-kelas": "web+ssr+native", "like-button": "web+ssr", "promo-modal": "web+ssr+native", "promo-slider": "web+ssr+native", "rating-stars": "web+ssr",
   });
   assert.equal(outputs("web")["promo-modal"], "web+ssr");
   const cp = plan(all, "crossplatform");
-  assert.deepEqual(cp.jobs.map((j: any) => j.name), ["promo-modal", "promo-slider"]);
+  assert.deepEqual(cp.jobs.map((j: any) => j.name), ["jadwal-kelas", "promo-modal", "promo-slider"]);
   assert.equal(cp.skipped.length, 3);
   assert.throws(() => plan(all.filter((c: any) => c.kind === "vue"), "crossplatform", { explicit: true }), /hanya bisa target web/);
 });
@@ -40,7 +40,7 @@ test("build parsial mempertahankan komponen lain dan membersihkan file lama", ()
   const r = run("build", "examples", "--out", out, "--only", "like-button,promo-modal", "-y");
   assert.equal(r.code, 0, r.out);
   const m = JSON.parse(readFileSync(path.join(out, "manifest.json"), "utf8"));
-  assert.deepEqual(Object.keys(m.components), ["like-button", "promo-modal", "promo-slider"]);
+  assert.deepEqual(Object.keys(m.components), ["jadwal-kelas", "like-button", "promo-modal", "promo-slider"]);
   const referenced = new Set(Object.values<any>(m.components).flatMap((c) => [c.types, c.web?.file, c.web?.runtime?.file, c.ssr?.file, c.native?.file]).filter(Boolean));
   const files = readdirSync(out).filter((f) => f !== "manifest.json");
   assert.deepEqual(files.sort(), [...referenced].sort(), "tidak ada file yatim");

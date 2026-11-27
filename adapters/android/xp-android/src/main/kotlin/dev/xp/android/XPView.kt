@@ -138,6 +138,8 @@ fun XPView(
     live: Boolean = false,
     loading: @Composable () -> Unit = { CircularProgressIndicator() },
     error: @Composable (Throwable) -> Unit = { Text("Gagal memuat $name: ${it.message}", color = Color(0xFFCF222E)) },
+    /** View native milik app yang bisa dipakai komponen lewat `<NativeView name="...">`. */
+    nativeViews: Map<String, XPNativeView> = emptyMap(),
 ) {
     val propsJson = remember(props) { XPJson.stringify(props) }
     val scope = rememberCoroutineScope()
@@ -238,7 +240,7 @@ fun XPView(
             is XPState.Failed -> error(s.error)
             XPState.Ready -> {
                 // ctx baru setiap revisi → Compose merender ulang node yang berubah.
-                val ctx = XPRenderCtx(holder.tree, holder.revision, holder.mountRevision, dispatch)
+                val ctx = XPRenderCtx(holder.tree, holder.revision, holder.mountRevision, dispatch, nativeViews)
                 Column(Modifier.fillMaxWidth()) {
                     val slot = Slot.InColumn(this, stretch = true)
                     holder.tree.root.children.forEach { key(it) { XPNodeView(ctx, it, slot) } }
@@ -340,7 +342,29 @@ private data class XPRenderCtx(
     /** Revisi setelah mount; node yang dibuat sesudahnya boleh menjalankan animasi `entering`. */
     val mountRevision: Int,
     val dispatch: (String, List<Any?>) -> Unit,
+    val nativeViews: Map<String, XPNativeView>,
 )
+
+/**
+ * Isi untuk view native yang dipakai lewat `<NativeView name="..." props={...} onEvent={...}>`.
+ *
+ * ```kotlin
+ * val calendar: XPNativeView = { AndroidView(factory = { CalendarView(it) }, modifier = modifier) }
+ * XPView(base, "jadwal-kelas", nativeViews = mapOf("calendar" to calendar))
+ * ```
+ */
+class XPNativeScope(
+    /** Prop `props` dari komponen (Map/List/String/Double/Boolean, sama seperti JSON). */
+    val props: Map<String, Any?>,
+    /** Ukuran, margin, latar, dan sudut dari `style` NativeView. Pasang ke view native. */
+    val modifier: Modifier,
+    private val emitter: (String, Any?) -> Unit,
+) {
+    /** Kirim event ke komponen: memanggil `onEvent(event, data)`. `data` harus bisa jadi JSON. */
+    fun emit(event: String, data: Any? = null) = emitter(event, data)
+}
+
+typealias XPNativeView = @Composable XPNativeScope.() -> Unit
 
 // --- tata letak: posisi anak di dalam parent (flex, alignSelf, stretch, margin auto) ---
 
@@ -706,6 +730,21 @@ private fun XPNodeView(ctx: XPRenderCtx, id: Int, slot: Slot) {
         )
         "TextInput" -> XPTextInput(ctx, node, style, base, interaction)
         "Modal" -> XPModal(ctx, node)
+        "NativeView" -> {
+            val factory = ctx.nativeViews[node.string("name")]
+            if (factory == null) {
+                // Tidak didaftarkan app: tampilkan children (pengganti), sama seperti di web.
+                XPContainer(ctx, node, style, base)
+            } else {
+                val key = node.handler("onEvent")
+                @Suppress("UNCHECKED_CAST")
+                val scope = XPNativeScope(
+                    props = node.props["props"] as? Map<String, Any?> ?: emptyMap(),
+                    modifier = base.xpBox(style),
+                ) { event, data -> key?.let { ctx.dispatch(it, listOf(event, data)) } }
+                factory(scope)
+            }
+        }
         else -> Log.w(TAG, "primitive tidak dikenal: ${node.type}")
     }
 }

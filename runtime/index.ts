@@ -179,6 +179,15 @@ export type TextInputProps = Base & {
   secure?: boolean;
 };
 export type ModalProps = Base & Children & { visible: boolean; onRequestClose?: () => void };
+export type NativeViewProps = Base &
+  Children & {
+    /** Nama view native yang didaftarkan app (`nativeViews` di XPView Android/iOS). */
+    name: string;
+    /** Data untuk view native. Harus bisa jadi JSON (tanpa function). */
+    props?: Record<string, unknown>;
+    /** Event dari view native, mis. `emit("select", { id: 3 })` di Kotlin/Swift. */
+    onEvent?: (event: string, data: unknown) => void;
+  };
 
 // Primitive = string di runtime (dirender host), tapi bertipe komponen supaya props dicek TypeScript.
 const primitive = <P,>(name: string) => name as unknown as (props: P) => VNode;
@@ -190,3 +199,8 @@ export const Pressable = primitive<PressableProps>("Pressable");
 export const ScrollView = primitive<ScrollViewProps>("ScrollView");
 export const TextInput = primitive<TextInputProps>("TextInput");
 export const Modal = primitive<ModalProps>("Modal");
+/**
+ * View native milik app (peta, video, kamera, custom view). App mendaftarkannya dengan nama di
+ * XPView; children ditampilkan sebagai pengganti di web atau kalau nama itu tidak didaftarkan.
+ */
+export const NativeView = primitive<NativeViewProps>("NativeView");

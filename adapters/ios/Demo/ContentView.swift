@@ -1,5 +1,44 @@
 import SwiftUI
+import UIKit
 import XPKit
+
+/// Kalender iOS (UIDatePicker) yang dipakai komponen `jadwal-kelas` lewat <NativeView name="calendar">.
+struct Kalender: UIViewRepresentable {
+    let ctx: XPNativeContext
+
+    func makeUIView(context: Context) -> UIDatePicker {
+        let picker = UIDatePicker()
+        picker.datePickerMode = .date
+        picker.preferredDatePickerStyle = .inline
+        picker.addTarget(context.coordinator, action: #selector(Coordinator.changed(_:)), for: .valueChanged)
+        return picker
+    }
+
+    func updateUIView(_ picker: UIDatePicker, context: Context) {
+        context.coordinator.ctx = ctx
+        if let ms = (ctx.props["minDate"] as? NSNumber)?.doubleValue {
+            picker.minimumDate = Date(timeIntervalSince1970: ms / 1000)
+        }
+    }
+
+    func makeCoordinator() -> Coordinator { Coordinator(ctx: ctx) }
+
+    final class Coordinator: NSObject {
+        var ctx: XPNativeContext
+        init(ctx: XPNativeContext) { self.ctx = ctx }
+
+        @objc func changed(_ picker: UIDatePicker) {
+            let f = DateFormatter()
+            f.dateFormat = "yyyy-MM-dd"
+            ctx.emit("select", f.string(from: picker.date))
+        }
+    }
+}
+
+/// View native milik app yang boleh dipakai komponen xp.
+private let nativeViews: [String: XPNativeView] = [
+    "calendar": { ctx in AnyView(Kalender(ctx: ctx)) },
+]
 
 /// Demo: komponen promo-modal yang sama dengan yang dipakai app Next.js, Nuxt, dan Android.
 struct ContentView: View {
@@ -25,6 +64,10 @@ struct ContentView: View {
                     "seats": 3,
                 ])
                 .id(reload)
+
+                // Komponen yang memakai view native milik app (UIDatePicker).
+                XPView(base: base, name: "jadwal-kelas", nativeViews: nativeViews)
+                    .id("jadwal-\(reload)")
 
                 // Ubah komponen → `npm run build` → tekan ini. Tanpa build ulang app.
                 Button("Muat ulang dari URL") { reload += 1 }

@@ -6,6 +6,7 @@
       "Fragment",
       "Image",
       "Modal",
+      "NativeView",
       "Pressable",
       "ScrollView",
       "Text",

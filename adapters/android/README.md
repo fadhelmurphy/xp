@@ -14,6 +14,7 @@ Parameter lain:
 
 - `publicKey`: hanya terima manifest yang ditandatangani kunci ini (`xp keygen`, `xp build --sign`).
 - `live`: untuk development. Sambung ke `xp dev` dan muat ulang setiap build baru, state `useState` dibawa.
+- `nativeViews`: view native milik app yang bisa dipakai komponen lewat `<NativeView name="...">` (peta, video, kalender, custom view). Lihat [NativeView](../../docs/runtime.md#nativeview).
 
 ```kotlin
 XPView(base = "http://10.0.2.2:4400", name = "promo-slider", live = BuildConfig.DEBUG)
@@ -94,6 +95,7 @@ Yang seharusnya terlihat:
 - Tap **Lihat detail** membuka **Dialog Android native**.
 - Tombol **+ / −** mengubah jumlah peserta, total dihitung, dan muncul teks "Kuota penuh". Semua logika ini jalan di QuickJS di dalam app.
 - Tombol back atau tap di luar dialog akan menutupnya (`onRequestClose`).
+- Kartu **Pilih jadwal kelas** berisi kalender bawaan Android (`CalendarView`) yang didaftarkan app lewat `nativeViews`. Pilih tanggal, maka komponen menampilkan "Jadwal: …". Contoh `NativeView`: view native milik app di dalam komponen xp.
 
 **Bukti komponennya dinamis:** ubah teks `"Lihat detail"` di `examples/promo-modal.tsx`, jalankan `npx github:fadhelmurphy/xp build examples -y`, lalu tap **Muat ulang dari URL** di app. Teksnya berubah tanpa build ulang app.
 
@@ -141,6 +143,7 @@ Tes lain: arah swipe (`XPGestureTest`), event `xp dev` (`XPDevEventsTest`), dan 
 | `TextInput` | `BasicTextField` |
 | `Image` | Coil `AsyncImage` |
 | `Modal` | `Dialog` |
+| `NativeView` | view yang didaftarkan app di `nativeViews` (mis. `AndroidView`) |
 
 Animasi: `transitionDuration` di style → `animateColorAsState`/`animateFloatAsState`; prop `entering` → `graphicsLayer` (alpha + translasi) yang dijalankan hanya untuk node yang muncul setelah mount.
 

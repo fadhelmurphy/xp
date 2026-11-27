@@ -31,7 +31,8 @@ async function indexPage(dir, dev) {
         .map(([name, c]) => {
           const link = (f) => (f ? `<a href="/${esc(f)}">${esc(f)}</a>` : "-");
           const title = dev ? `<a href="/preview/${esc(name)}">${esc(name)}</a>` : esc(name);
-          return `<tr><td><b>${title}</b><br><small>${esc((c.primitives ?? []).join(", "))}</small></td>` +
+          const natives = c.nativeViews ? ` · native view: ${esc(c.nativeViews.join(", "))}` : "";
+          return `<tr><td><b>${title}</b><br><small>${esc((c.primitives ?? []).join(", "))}${natives}</small></td>` +
             `<td>${link(c.web?.file)}</td><td>${link(c.native?.file)}</td><td>${link(c.types)}</td></tr>`;
         })
         .join("")

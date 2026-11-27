@@ -232,7 +232,7 @@ export default function PromoModal({ title }: { title: string }) {
 
 Tidak perlu `import React`. Hooks yang tersedia: `useState`, `useEffect`, `useMemo`, `useCallback`, `useRef`. `setTimeout` dan `setInterval` juga jalan di Android dan iOS.
 
-Elemen yang bisa dipakai hanya `View`, `Text`, `Image`, `Pressable`, `ScrollView`, `TextInput`, dan `Modal`. Tag HTML akan ditolak TypeScript. Styling lewat prop `style` atau `className` (Tailwind), lihat [Styling dan Tailwind](#styling-dan-tailwind).
+Elemen yang bisa dipakai hanya `View`, `Text`, `Image`, `Pressable`, `ScrollView`, `TextInput`, `Modal`, dan `NativeView` (view native milik app, misalnya peta atau kalender, yang didaftarkan app di `XPView`). Tag HTML akan ditolak TypeScript. Styling lewat prop `style` atau `className` (Tailwind), lihat [Styling dan Tailwind](#styling-dan-tailwind).
 
 Penjelasan lengkap setiap primitive, props, hooks, dan style ada di [docs/runtime.md](docs/runtime.md).
 
@@ -340,6 +340,7 @@ Semua ada di [`examples/`](examples).
 |---|---|---|
 | [`promo-modal`](examples/promo-modal.tsx) | xp | kartu promo dengan modal pendaftaran |
 | [`promo-slider`](examples/promo-slider.tsx) | xp | slider dengan tombol, titik indikator, swipe, autoplay, dan animasi |
+| [`jadwal-kelas`](examples/jadwal-kelas.tsx) | xp | kalender native milik app (`NativeView`), tanggal yang dipilih dikirim balik ke komponen |
 | [`like-button`](examples/like-button.tsx) | React | tombol suka |
 | [`rating-stars`](examples/rating-stars.vue) | Vue | rating bintang dengan scoped CSS |
 | [`faq-list`](examples/faq-list.svelte) | Svelte | FAQ dengan `transition:slide` |

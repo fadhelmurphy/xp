@@ -9,11 +9,13 @@ export const TAGS: Record<string, string> = {
   ScrollView: "div",
   TextInput: "input",
   Modal: "div",
+  NativeView: "div",
 };
 
 // Default ala React Native: semua kontainer flex column.
 const BASE: Record<string, Record<string, string>> = {
   View: { display: "flex", "flex-direction": "column", "box-sizing": "border-box", "min-width": "0" },
+  NativeView: { display: "flex", "flex-direction": "column", "box-sizing": "border-box", "min-width": "0" },
   Pressable: { display: "flex", "flex-direction": "column", "box-sizing": "border-box", cursor: "pointer" },
   ScrollView: { display: "flex", "flex-direction": "column", overflow: "auto", "box-sizing": "border-box" },
   Text: { display: "block" },

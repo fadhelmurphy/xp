@@ -23,18 +23,24 @@ public struct XPView: View {
     private let propsJSON: String
     private let publicKey: String?
     private let live: Bool
+    private let nativeViews: [String: XPNativeView]
     @StateObject private var model = XPModel()
     @Environment(\.colorScheme) private var colorScheme
 
-    public init(base: URL, name: String, props: [String: Any] = [:], publicKey: String? = nil, live: Bool = false) {
+    /// - Parameter nativeViews: view native milik app yang bisa dipakai komponen lewat
+    ///   `<NativeView name="...">`, mis. `["calendar": { ctx in AnyView(Kalender(ctx: ctx)) }]`.
+    public init(base: URL, name: String, props: [String: Any] = [:], publicKey: String? = nil, live: Bool = false,
+                nativeViews: [String: XPNativeView] = [:]) {
         self.base = base
         self.name = name
         self.propsJSON = (try? XPJSON.stringify(props)) ?? "{}"
         self.publicKey = publicKey
         self.live = live
+        self.nativeViews = nativeViews
     }
 
     public var body: some View {
+        let _ = model.setNativeViews(nativeViews)
         content
             // Lebar layar dan mode gelap untuk varian className (sm:, md:, dark:, ...).
             .onAppear { model.setEnvironment(screen: screenSize, dark: colorScheme == .dark) }
@@ -96,11 +102,33 @@ public struct XPView: View {
 // MARK: - State
 
 @MainActor
+/// Isi untuk view native yang dipakai lewat `<NativeView name="..." props={...} onEvent={...}>`.
+public struct XPNativeContext {
+    /// Prop `props` dari komponen (seperti hasil JSON: String, NSNumber, Bool, array, dictionary).
+    public let props: [String: Any]
+    let emitter: (String, Any?) -> Void
+
+    /// Kirim event ke komponen: memanggil `onEvent(event, data)`. `data` harus bisa jadi JSON.
+    public func emit(_ event: String, _ data: Any? = nil) {
+        emitter(event, data)
+    }
+}
+
+/// Pembuat view native untuk satu nama. Ukuran, latar, dan sudut dari `style` dipasang oleh XPKit.
+public typealias XPNativeView = (XPNativeContext) -> AnyView
+
 final class XPModel: ObservableObject {
     enum State {
         case loading
         case ready
         case failed(String)
+    }
+
+    /// Diisi XPView setiap render (bukan @Published, jadi tidak memicu render ulang).
+    private(set) var nativeViews: [String: XPNativeView] = [:]
+
+    func setNativeViews(_ views: [String: XPNativeView]) {
+        nativeViews = views
     }
 
     @Published private(set) var state: State = .loading
@@ -418,6 +446,19 @@ struct XPRenderer {
                 styled = AnyView(button.buttonStyle(.plain))
             }
             view = swipe(n, AnyView(styled.disabled(key == nil || n.bool("disabled"))))
+
+        case "NativeView":
+            if let factory = model.nativeViews[n.string("name") ?? ""] {
+                let key = n.handler("onEvent")
+                let model = self.model
+                let ctx = XPNativeContext(props: n.props["props"] as? [String: Any] ?? [:]) { event, data in
+                    if let key { model.dispatch(key, [event, data ?? NSNull()]) }
+                }
+                view = box(factory(ctx), s, fillWidth, fillHeight, align: .topLeading, overlay: overlay)
+            } else {
+                // Tidak didaftarkan app: tampilkan children (pengganti), sama seperti di web.
+                view = box(container(n.children, s), s, fillWidth, fillHeight, align: containerAlign(s), overlay: overlay)
+            }
 
         case "ScrollView":
             let horizontal = n.bool("horizontal")
