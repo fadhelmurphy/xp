@@ -19,6 +19,59 @@ Parameter lain:
 XPView(base = "http://10.0.2.2:4400", name = "promo-slider", live = BuildConfig.DEBUG)
 ```
 
+## Memakai di project yang sudah ada
+
+Syarat: minSdk 24 ke atas, Kotlin 2.x. SDK ini belum terbit di Maven, jadi modulnya disambungkan langsung dari folder repo `xp`.
+
+**1. `settings.gradle.kts`**
+```kotlin
+include(":xp-android")
+project(":xp-android").projectDir = file("C:/path/ke/xp/adapters/android/xp-android")
+```
+
+**2. `build.gradle.kts` (root).** Tambahkan plugin library dengan versi yang sama dengan `com.android.application` di project kamu:
+```kotlin
+plugins {
+    id("com.android.library") version "<versi AGP yang sama>" apply false
+}
+```
+
+**3. `app/build.gradle.kts`**
+```kotlin
+dependencies {
+    implementation(project(":xp-android"))
+}
+```
+
+**4. Pasang di layar Compose**
+```kotlin
+import dev.xp.android.XPView
+
+XPView(
+    base = "https://cdn.kamu/xp", // folder dist/ hasil `xp build`
+    name = "promo-modal",
+    props = mapOf("title" to "Kelas IELTS", "price" to 150000),
+)
+```
+
+App yang masih memakai XML/View bisa membungkusnya dengan `ComposeView`. Aktifkan Compose di modul app (`buildFeatures { compose = true }` dan plugin `org.jetbrains.kotlin.plugin.compose`), lalu:
+```xml
+<androidx.compose.ui.platform.ComposeView
+    android:id="@+id/promo"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content" />
+```
+```kotlin
+findViewById<ComposeView>(R.id.promo).setContent {
+    XPView(base = "https://cdn.kamu/xp", name = "promo-modal")
+}
+```
+
+**5. Production**
+- Sajikan `dist/` lewat https (CDN atau bucket). `android:usesCleartextTraffic="true"` hanya perlu saat mencoba remote lokal lewat `http://`.
+- Tanda tangani bundle supaya app hanya menerima komponen dari kamu: `npx github:fadhelmurphy/xp keygen`, lalu `npx github:fadhelmurphy/xp build src --sign`, dan isi `publicKey` di `XPView`.
+- Saat development, `live = BuildConfig.DEBUG` bersama `xp dev` membuat app memuat ulang setiap ada build baru.
+
 ## Menjalankan demo di emulator
 
 **1. Jalankan remote di WSL** (dari root repo `xp`):
