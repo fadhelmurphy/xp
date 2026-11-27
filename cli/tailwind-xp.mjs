@@ -774,7 +774,10 @@ async function componentGraph(file, runtimeDir) {
         name: "xp-graph",
         setup(b) {
           b.onResolve({ filter: /^@xp\/runtime/ }, (a) => ({ path: a.path, external: true }));
-          b.onResolve({ filter: /^[^./]/ }, (a) => ({ path: a.path, external: true }));
+          // paket npm saja; entry point dan path absolut (mis. C:\... di Windows) tetap dibaca
+          b.onResolve({ filter: /^[^./]/ }, (a) =>
+            a.kind === "entry-point" || path.isAbsolute(a.path) ? undefined : { path: a.path, external: true },
+          );
           b.onLoad({ filter: /\.css$/ }, (a) => {
             cssFiles.push(a.path);
             return { contents: "", loader: "js" };

@@ -57,7 +57,7 @@ async function jsxKind(file, seen) {
   const specs = [...src.matchAll(IMPORTS)].map((m) => m[1] ?? m[2] ?? m[3]);
   if (specs.some((s) => s === "@xp/runtime" || s.startsWith("@xp/runtime/"))) return "xp";
   const dir = path.dirname(file);
-  if (specs.some((s) => !s.startsWith(".") && !s.startsWith("/") && isReactPackage(s, dir))) return "react";
+  if (specs.some((s) => !s.startsWith(".") && !path.isAbsolute(s) && isReactPackage(s, dir))) return "react";
   for (const s of specs.filter((x) => x.startsWith("."))) {
     for (const ext of LOCAL_EXT) {
       const f = path.resolve(dir, s + ext);
