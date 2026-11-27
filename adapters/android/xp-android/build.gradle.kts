@@ -17,7 +17,9 @@ android {
     sourceSets["test"].java.srcDirs("src/test/kotlin")
 }
 
-kotlin { jvmToolchain(17) }
+// Target Java 17 dengan JDK yang dipakai Gradle (JDK bawaan Android Studio sudah cukup),
+// tanpa mewajibkan JDK 17 terpasang.
+kotlin { compilerOptions { jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17) } }
 
 dependencies {
     // QuickJS untuk Android (Cash App). Hanya QuickJs.create()/evaluate() yang dipakai.

@@ -26,7 +26,9 @@ android {
     sourceSets["main"].java.srcDirs("src/main/kotlin")
 }
 
-kotlin { jvmToolchain(17) }
+// Target Java 17 dengan JDK yang dipakai Gradle (JDK bawaan Android Studio sudah cukup),
+// tanpa mewajibkan JDK 17 terpasang.
+kotlin { compilerOptions { jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17) } }
 
 dependencies {
     implementation(project(":xp-android"))
