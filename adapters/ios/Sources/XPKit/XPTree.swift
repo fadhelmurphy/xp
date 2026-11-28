@@ -70,7 +70,7 @@ public struct XPEntering: Equatable {
 public final class XPTree {
     public static let protocolVersion = 1
     public static let rootID = 0
-    public static let primitives: Set<String> = ["View", "Text", "Image", "Pressable", "ScrollView", "TextInput", "Modal", "#text"]
+    public static let primitives: Set<String> = ["View", "Text", "Image", "Pressable", "ScrollView", "TextInput", "Modal", "NativeView", "#text"]
 
     private var nodes: [Int: XPNode] = [XPTree.rootID: XPNode(id: XPTree.rootID, type: "#root")]
 
