@@ -6,7 +6,7 @@ plugins {
 
 android {
     namespace = "dev.xp.demo"
-    compileSdk = 35
+    compileSdk = 36
     defaultConfig {
         applicationId = "dev.xp.demo"
         minSdk = 24
@@ -32,7 +32,7 @@ kotlin { compilerOptions { jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarg
 
 dependencies {
     implementation(project(":xp-android"))
-    implementation(platform("androidx.compose:compose-bom:2025.06.01"))
+    implementation(platform("androidx.compose:compose-bom:2025.08.00"))
     implementation("androidx.compose.material3:material3")
     implementation("androidx.activity:activity-compose:1.10.1")
 }

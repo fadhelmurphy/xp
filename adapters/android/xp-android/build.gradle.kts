@@ -6,7 +6,7 @@ plugins {
 
 android {
     namespace = "dev.xp.android"
-    compileSdk = 35
+    compileSdk = 36
     defaultConfig {
         minSdk = 24
         consumerProguardFiles("consumer-rules.pro")
@@ -28,7 +28,7 @@ dependencies {
     // QuickJS untuk Android (Cash App). Hanya QuickJs.create()/evaluate() yang dipakai.
     implementation("app.cash.zipline:zipline:1.27.0")
 
-    implementation(platform("androidx.compose:compose-bom:2025.06.01"))
+    implementation(platform("androidx.compose:compose-bom:2025.08.00"))
     implementation("androidx.compose.foundation:foundation")
     implementation("androidx.compose.material3:material3")
     implementation("androidx.compose.ui:ui")
