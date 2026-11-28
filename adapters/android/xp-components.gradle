@@ -1,0 +1,96 @@
+// Komponen xp versi Kotlin, diambil dari CDN saat app di-build lalu ikut dikompilasi ke APK/AAB.
+// Di Play Store komponennya sudah native: tidak ada engine JS dan tidak ada unduhan saat runtime.
+//
+// app/build.gradle.kts:
+//
+//     extra["xpRemote"] = "https://cdn.kamu/xp"          // folder dist/ hasil `xp build`
+//     extra["xpComponents"] = listOf("promo-modal", "promo-slider")
+//     apply(from = "C:/path/ke/xp/adapters/android/xp-components.gradle")
+//
+// Bisa juga lewat gradle.properties / -P: xpRemote=..., xpComponents=promo-modal,promo-slider
+// Tanpa xpComponents: semua komponen yang punya versi Kotlin di manifest.
+
+import groovy.json.JsonSlurper
+import java.security.MessageDigest
+
+def setting = { String key ->
+    if (project.extensions.extraProperties.has(key)) return project.extensions.extraProperties.get(key)
+    return project.findProperty(key)
+}
+
+def remote = setting("xpRemote")?.toString()?.replaceAll('/+$', '')
+def wanted = setting("xpComponents")
+if (wanted instanceof CharSequence) wanted = wanted.toString().split(',')*.trim().findAll { it }
+def outDir = project.layout.buildDirectory.dir("generated/xp/kotlin").get().asFile
+
+def sha256 = { byte[] bytes -> MessageDigest.getInstance("SHA-256").digest(bytes).encodeHex().toString() }
+
+def open = { String url ->
+    def conn = new URL(url).openConnection()
+    conn.connectTimeout = 15000
+    conn.readTimeout = 30000
+    conn.setRequestProperty("Cache-Control", "no-cache")
+    conn.inputStream.withCloseable { it.bytes }
+}
+
+def fetch = tasks.register("xpComponents") {
+    group = "xp"
+    description = "Unduh komponen xp versi Kotlin dari ${remote ?: '(xpRemote belum diisi)'}"
+    outputs.dir(outDir)
+    // Selalu cek manifest: deploy baru di CDN harus ikut ke build berikutnya.
+    outputs.upToDateWhen { false }
+
+    doLast {
+        if (!remote) throw new GradleException("xp: isi xpRemote dengan URL folder dist/ hasil `xp build`")
+        def manifest
+        try {
+            manifest = new JsonSlurper().parse(open("${remote}/manifest.json"))
+        } catch (Exception e) {
+            if (new File(outDir, "XPComponents.kt").exists()) {
+                logger.warn("xp: ${remote}/manifest.json tidak bisa diambil (${e.message}); memakai komponen dari build sebelumnya")
+                return
+            }
+            throw new GradleException("xp: gagal mengambil ${remote}/manifest.json: ${e.message}", e)
+        }
+        def components = manifest.components ?: [:]
+        def names = wanted ? wanted.collect { it.toString() } : components.findAll { it.value.kotlin }.keySet().sort()
+        def entries = []
+        def files = [:]
+        names.each { name ->
+            def c = components[name]
+            if (c == null) throw new GradleException("xp: komponen '${name}' tidak ada di ${remote}/manifest.json")
+            if (!c.kotlin) {
+                logger.warn("xp: ${name} belum punya versi Kotlin (lihat peringatan xp build); di app tetap dimuat dari URL")
+                return
+            }
+            def bytes = open("${remote}/${c.kotlin.file}")
+            if (sha256(bytes) != c.kotlin.sha256) throw new GradleException("xp: isi ${c.kotlin.file} tidak cocok dengan sha256 di manifest")
+            files[c.kotlin.file] = bytes
+            entries << [name: name, object: c.kotlin.object]
+        }
+
+        def pkg = new File(outDir, "dev/xp/generated")
+        project.delete(outDir)
+        pkg.mkdirs()
+        files.each { file, bytes -> new File(pkg, file).bytes = bytes }
+        def lines = entries.collect { "        \"${it.name}\" to ${it.object}," }.join("\n")
+        new File(pkg, "XPComponents.kt").text = """// Dibuat oleh task xpComponents dari ${remote}. Jangan diubah manual.
+package dev.xp.generated
+
+import dev.xp.android.compiled.XPCompiledComponent
+import dev.xp.android.compiled.XPComponentRegistry
+
+object XPComponents : XPComponentRegistry {
+    override val components: Map<String, XPCompiledComponent> = mapOf(
+${lines}
+    )
+}
+"""
+        logger.lifecycle("xp: ${entries.size} komponen native dari ${remote}" + (entries ? ": ${entries*.name.join(', ')}" : ""))
+    }
+}
+
+plugins.withId("com.android.application") {
+    android.sourceSets.main.java.srcDir(outDir)
+    tasks.named("preBuild") { dependsOn(fetch) }
+}

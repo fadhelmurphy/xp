@@ -296,6 +296,24 @@ Bundle native dijalankan di QuickJS (Android) dan JavaScriptCore (iOS), bukan di
 
 `xp build` memberi peringatan kalau bundle native memakai API di atas.
 
+## Kompilasi ke native
+
+Untuk Android, `xp build` juga menerjemahkan komponen ke Kotlin, supaya di build release komponen jalan sebagai kode native tanpa engine JS (lihat [Komponen native di build release](../adapters/android/README.md#komponen-native-di-build-release)). Hampir semua kode komponen biasa bisa diterjemahkan: fungsi dan closure, `let`/`const`, destructuring di deklarasi dan parameter, spread, optional chaining, template string, `try/catch/finally`, `switch`, semua jenis loop, regex, `Map`, `Set`, `JSON`, `Math`, `Date.now()`, enum TypeScript, dan import antar file.
+
+Yang belum bisa:
+
+- `class`, `async`/`await`, generator, getter/setter
+- `this`, `arguments`
+- destructuring di assignment (`[a, b] = [b, a]`; di `const`/`let` boleh)
+- `instanceof` selain `Array`, tagged template, BigInt
+
+Komponen yang memakai salah satunya tetap di-build seperti biasa, hanya tanpa versi Kotlin. `xp build` menyebut file dan barisnya:
+
+```
+⚠ belum bisa dikompilasi ke Kotlin (Android tetap memakai bundle native):
+    src/promo.tsx:12:3 class belum didukung di target native
+```
+
 ## Contoh lengkap
 
 - [`examples/promo-modal.tsx`](../examples/promo-modal.tsx): kartu promo, modal, state, tombol nonaktif, hitung total.

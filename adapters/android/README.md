@@ -73,6 +73,26 @@ findViewById<ComposeView>(R.id.promo).setContent {
 - Tanda tangani bundle supaya app hanya menerima komponen dari kamu: `npx github:fadhelmurphy/xp keygen`, lalu `npx github:fadhelmurphy/xp build src --sign`, dan isi `publicKey` di `XPView`.
 - Saat development, `live = BuildConfig.DEBUG` bersama `xp dev` membuat app memuat ulang setiap ada build baru.
 
+## Komponen native di build release
+
+`xp build` juga membuat versi Kotlin dari setiap komponen `@xp/runtime` (`<nama>.kotlin.<hash>.kt`, tercatat di `manifest.json` sebagai `kotlin`). Task Gradle `xpComponents` mengunduh file itu dari CDN saat app di-build, jadi yang masuk ke Play Store sudah kode native: tidak ada QuickJS dan tidak ada unduhan saat komponen tampil. Tim mobile tidak perlu menyalin file apa pun.
+
+```kotlin
+// app/build.gradle.kts, di bawah blok plugins { }
+extra["xpRemote"] = "https://cdn.kamu/xp"                 // folder dist/ hasil `xp build`
+extra["xpComponents"] = listOf("promo-modal", "promo-slider") // kosongkan = semua yang punya versi Kotlin
+apply(from = "C:/path/ke/xp/adapters/android/xp-components.gradle")
+```
+
+`XPView` tidak perlu diubah. Kalau komponen ada di build, versi Kotlin yang dipakai. Kalau tidak ada, komponen dimuat dari `base` seperti biasa. `live = true` selalu memakai bundle dari URL supaya `xp dev` tetap bisa dipakai.
+
+- Task ini jalan sebelum setiap build (`preBuild`) dan selalu mengecek `manifest.json` terbaru. Isi setiap file dicek dengan `sha256` di manifest. Kalau CDN tidak bisa dihubungi, hasil unduhan sebelumnya yang dipakai.
+- Komponen baru di CDN baru masuk ke app di build berikutnya. Ini memang aturan Play Store dan App Store: kode native tidak boleh diunduh saat runtime.
+- Komponen yang memakai fitur JS di luar jangkauan compiler (lihat [Kompilasi ke native](../../docs/runtime.md#kompilasi-ke-native)) tidak punya versi Kotlin. `xp build` memberi peringatan dan menyebut lokasinya, task Gradle juga, dan di app komponen itu tetap dimuat dari URL.
+- R8/ProGuard: aturan keep sudah ikut dari `consumer-rules.pro` SDK.
+
+Demo: `./gradlew :demo:installDebug -PxpNative` (dengan `npx github:fadhelmurphy/xp serve` jalan di komputer yang sama).
+
 ## Menjalankan demo di emulator
 
 **1. Jalankan remote di WSL** (dari root repo `xp`):
@@ -126,6 +146,9 @@ Tes lain: arah swipe (`XPGestureTest`), event `xp dev` (`XPDevEventsTest`), dan 
 |---|---|
 | `XPView.kt` | Composable publik dan pemetaan primitive ke Compose |
 | `XPEngine.kt` | QuickJS (zipline), satu thread, `XP.mount/update/dispatch/unmount/tick/snapshot` |
+| `XPRuntime.kt` | Pilihan antara komponen terkompilasi dan QuickJS, dan pencarian registry `dev.xp.generated.XPComponents` |
+| `compiled/` | Runtime untuk komponen terkompilasi: reconciler dan hooks (port dari `runtime/reconciler.ts`), nilai JS, dan builtin (String, Array, Math, JSON, Map, Set, ...) |
+| `../xp-components.gradle` | Task `xpComponents`: unduh versi Kotlin komponen dari CDN saat build |
 | `XPLoader.kt` | `manifest.json` → bundle, verifikasi `sha256` dan tanda tangan, cek protokol & primitive |
 | `XPSignature.kt` | Verifikasi `manifest.sig` (ECDSA P-256) |
 | `XPGesture.kt` | Arah swipe |
@@ -152,3 +175,4 @@ Animasi: `transitionDuration` di style → `animateColorAsState`/`animateFloatAs
 - Satu QuickJS per `XPView`. Untuk banyak komponen di satu layar, nanti perlu berbagi runtime.
 - Timer: `XPView` membaca `XP.nextTimer()` setelah setiap perubahan, menunggu dengan `delay`, lalu memanggil `XP.tick()`. Timer berhenti saat `XPView` keluar dari komposisi.
 - Swipe dideteksi dengan `detectDragGestures`. Kode Compose ini, termasuk timer dan `live`, belum dikompilasi di sini.
+- Komponen terkompilasi: runtime `compiled/` dan hasil compiler sudah dites dengan kotlinc di JVM, dibandingkan langkah demi langkah dengan bundle JS (`tests/native-kotlin.test.ts`). Penyambungannya ke `XPView` dan task Gradle di dalam build Android belum pernah dijalankan; task-nya sendiri sudah dicoba dengan Gradle di luar Android.

@@ -118,7 +118,11 @@ import kotlinx.coroutines.sync.withLock
 private const val TAG = "XP"
 
 /**
- * Memuat komponen xp dari URL dan merendernya dengan Jetpack Compose (tanpa WebView).
+ * Merender komponen xp dengan Jetpack Compose (tanpa WebView).
+ *
+ * Kalau komponen ikut dikompilasi ke app (task Gradle `xpComponents`),
+ * yang dipakai adalah versi Kotlin-nya, tanpa unduhan dan tanpa engine JS. Kalau tidak, atau saat `live`,
+ * bundle dimuat dari URL dan dijalankan di QuickJS.
  *
  *     XPView(base = "https://cdn.kamu/xp", name = "promo-modal",
  *            props = mapOf("title" to "Kelas IELTS", "price" to 150000))
@@ -127,6 +131,7 @@ private const val TAG = "XP"
  *
  * @param publicKey kunci publik dari `xp keygen`; manifest yang tidak ditandatangani kunci ini ditolak.
  * @param live development: sambung ke `xp dev` dan muat ulang setiap build baru (state dipertahankan).
+ *   Selalu memakai bundle dari URL walaupun komponen terkompilasi tersedia.
  */
 @Composable
 fun XPView(
@@ -153,17 +158,22 @@ fun XPView(
         holder.latestEnv = XPEnv(widthDp, heightDp, dark)
     }
 
-    // Unduh bundle → jalankan di QuickJS → mount.
+    // Komponen terkompilasi, atau unduh bundle → jalankan di QuickJS. Lalu mount.
     LaunchedEffect(holder) {
         try {
-            val bundle = XPLoader.load(base, name, publicKey)
-            val engine = XPEngine.create(bundle.code, bundle.file)
+            val compiled = if (live) null else XPCompiled.component(name)
+            val engine: XPRuntime = if (compiled != null) {
+                XPCompiledRuntime(compiled)
+            } else {
+                val bundle = XPLoader.load(base, name, publicKey)
+                holder.file = bundle.file
+                XPEngineRuntime(XPEngine.create(bundle.code, bundle.file))
+            }
             if (holder.disposed) {
                 engine.close()
                 return@LaunchedEffect
             }
             holder.engine = engine
-            holder.file = bundle.file
             holder.mutex.withLock {
                 holder.mountedProps = holder.latestProps
                 holder.sendEnvironment(engine)
@@ -197,7 +207,7 @@ fun XPView(
 
     // xp dev: build baru → bundle baru, state lama dibawa lewat snapshot.
     LaunchedEffect(holder, live, holder.state) {
-        if (!live || holder.state != XPState.Ready) return@LaunchedEffect
+        if (!live || holder.state != XPState.Ready || holder.engine !is XPEngineRuntime) return@LaunchedEffect
         XPLive.updates(base).collect { names ->
             if (name !in names) return@collect
             try {
@@ -261,17 +271,17 @@ private sealed interface XPState {
 private class XPHolder(private val scope: CoroutineScope) {
     var tree by mutableStateOf(XPTree())
     val mutex = Mutex()
-    var engine: XPEngine? = null
+    var engine: XPRuntime? = null
     var file: String? = null
     var disposed = false
     var mountedProps: String? = null
     var mountRevision = 0
     var latestProps = "{}"
     var latestEnv = XPEnv(0, 0, false)
-    private var sentEnv: Pair<XPEnv, XPEngine>? = null
+    private var sentEnv: Pair<XPEnv, XPRuntime>? = null
 
     /** Dipanggil di dalam mutex: kirim ukuran layar/mode gelap kalau berubah sejak terakhir dikirim. */
-    suspend fun sendEnvironment(engine: XPEngine) {
+    suspend fun sendEnvironment(engine: XPRuntime) {
         val env = latestEnv
         if (sentEnv?.first == env && sentEnv?.second === engine) return
         sentEnv = env to engine
@@ -285,18 +295,19 @@ private class XPHolder(private val scope: CoroutineScope) {
         if (bundle.file == file) return
         val next = XPEngine.create(bundle.code, bundle.file)
         mutex.withLock {
-            val old = engine
+            val old = engine as? XPEngineRuntime
             if (disposed || old == null) {
                 next.close()
                 return
             }
-            val snapshot = old.snapshot()
+            val snapshot = old.engine.snapshot()
             val fresh = XPTree()
             next.environment(latestEnv.widthDp, latestEnv.heightDp, latestEnv.dark)
             fresh.applyBatches(next.mount(latestProps, snapshot))
+            val runtime = XPEngineRuntime(next)
             tree = fresh
-            engine = next
-            sentEnv = latestEnv to next
+            engine = runtime
+            sentEnv = latestEnv to runtime
             file = bundle.file
             mountedProps = latestProps
             revision = fresh.revision
@@ -307,8 +318,8 @@ private class XPHolder(private val scope: CoroutineScope) {
     }
 
     /** Dipanggil di dalam mutex. Setiap hasil XP.* bisa menjadwalkan timer baru. */
-    fun apply(batchesJson: String) {
-        tree.applyBatches(batchesJson)
+    fun apply(batches: List<*>) {
+        tree.applyBatches(batches)
         revision = tree.revision
         armTimer()
     }

@@ -72,6 +72,7 @@ function summary(r) {
   const parts = [`web ${kb(rec.web.bytes)}`];
   if (rec.ssr) parts.push(`ssr ${kb(rec.ssr.bytes)}`);
   if (rec.native) parts.push(`native ${kb(rec.native.bytes)}`);
+  if (rec.kotlin) parts.push(`kotlin ${kb(rec.kotlin.bytes)}`);
   if (rec.primitives) parts.push(`[${rec.primitives.join(", ")}]`);
   if (rec.nativeViews) parts.push(`native view: ${rec.nativeViews.join(", ")}`);
   return parts.join(" · ");

@@ -64,7 +64,7 @@ class XPTree {
     companion object {
         const val PROTOCOL = 1
         const val ROOT = 0
-        val PRIMITIVES = setOf("View", "Text", "Image", "Pressable", "ScrollView", "TextInput", "Modal", "#text")
+        val PRIMITIVES = setOf("View", "Text", "Image", "Pressable", "ScrollView", "TextInput", "Modal", "NativeView", "#text")
     }
 
     private val nodes = HashMap<Int, XPNode>().apply { put(ROOT, XPNode(ROOT, "#root")) }
@@ -81,7 +81,11 @@ class XPTree {
 
     /** Terapkan hasil XP.mount/update/dispatch/unmount: string JSON berisi daftar batch. */
     fun applyBatches(json: String) {
-        val batches = XPJson.parse(json) as? List<*> ?: error("hasil runtime bukan array batch")
+        applyBatches(XPJson.parse(json) as? List<*> ?: error("hasil runtime bukan array batch"))
+    }
+
+    /** Daftar batch yang sudah berupa objek (dari engine yang di-parse, atau langsung dari komponen terkompilasi). */
+    fun applyBatches(batches: List<*>) {
         if (batches.isEmpty()) return
         for (b in batches) applyBatch(b as Map<*, *>)
         revision++

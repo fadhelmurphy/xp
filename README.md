@@ -509,6 +509,8 @@ Props berupa `String`, angka, `Boolean`, `null`, `List`, atau `Map`. Kalau props
 
 Dari emulator, server lokal diakses lewat `http://10.0.2.2:4400`. Demo app dan cara menjalankannya ada di [`adapters/android/README.md`](adapters/android/README.md).
 
+Untuk build release, komponen bisa ikut dikompilasi ke dalam app sebagai kode Kotlin, jadi di Play Store tidak ada engine JS lagi. `xp build` membuat versi Kotlin-nya, dan task Gradle `xpComponents` mengambilnya dari CDN saat app di-build. Lihat [Komponen native di build release](adapters/android/README.md#komponen-native-di-build-release). Untuk iOS belum ada; di sana komponen masih dijalankan di JavaScriptCore.
+
 ## iOS
 
 Bundle native dijalankan di JavaScriptCore bawaan iOS dan dirender dengan SwiftUI, tanpa dependency tambahan. `Modal` jadi `.sheet`, `Pressable` jadi `Button`, `TextInput` jadi `TextField`.
@@ -598,10 +600,13 @@ Yang sudah dites:
 - Styling komponen web: CSS biasa, CSS modules, Tailwind (termasuk `@apply` di Vue dan Svelte), emotion, styled-components, dan MUI, dari SSR sampai hydrate di jsdom dan Chromium.
 - `className` Tailwind di komponen xp: hasil SSR dan CSS varian di jsdom dan Chromium (lebar layar dan mode gelap), hasil style di bundle native (QuickJS) termasuk perubahan lebar layar, mode gelap, dan tinggi layar.
 
+- Komponen yang dikompilasi ke Kotlin: hasilnya dijalankan di JVM dan tree-nya dibandingkan dengan bundle JS setelah setiap event, timer, perubahan props, lebar layar, dan mode gelap (contoh di `examples/`, komponen dengan `className`, dan fixture yang memakai banyak fitur JS).
+
 Yang belum:
 
 - SDK Android: bagian tree, style, JSON, arah swipe, event `xp dev`, dan verifikasi tanda tangan sudah dites dengan kotlinc. Bagian Compose (termasuk timer, swipe, drag, dan reload `live`) belum pernah dikompilasi atau dijalankan di emulator.
 - SDK iOS: kode Swift belum dikompilasi. Jalankan `swift test` di Mac.
+- Komponen terkompilasi di Android: belum dijalankan di dalam build Android sungguhan (Gradle + Compose). Kompilasi ke Swift untuk iOS belum ada.
 - Tampilan style baru di Android dan iOS (posisi absolut, grid, shadow, gradien, border per sisi, transform, animasi berulang, style saat ditekan) belum dilihat di emulator; parsing style-nya sudah dites dengan kotlinc.
 - Belum ada GIF demo untuk Android dan iOS.
 - Layout di mobile belum memakai Yoga, jadi hasilnya bisa sedikit berbeda dari web.

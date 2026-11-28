@@ -36,3 +36,11 @@ dependencies {
     implementation("androidx.compose.material3:material3")
     implementation("androidx.activity:activity-compose:1.10.1")
 }
+
+// Komponen dikompilasi ke dalam APK (seperti build release untuk Play Store):
+//   ./gradlew :demo:installDebug -PxpNative
+// Butuh `npx xp serve` jalan di komputer ini (default http://localhost:4400, ganti dengan -PxpRemote=...).
+if (providers.gradleProperty("xpNative").isPresent) {
+    extra["xpRemote"] = providers.gradleProperty("xpRemote").getOrElse("http://localhost:4400")
+    apply(from = "../xp-components.gradle")
+}
