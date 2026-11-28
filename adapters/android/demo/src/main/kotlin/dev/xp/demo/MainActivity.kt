@@ -25,6 +25,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import dev.xp.android.XPCompiled
 import dev.xp.android.XPNativeView
 import dev.xp.android.XPView
 
@@ -65,7 +66,13 @@ class MainActivity : ComponentActivity() {
                     verticalArrangement = Arrangement.spacedBy(16.dp),
                 ) {
                     Text("App native (Jetpack Compose)", fontSize = 20.sp)
-                    Text("Komponen di bawah dimuat dari ${BuildConfig.XP_URL}", fontSize = 12.sp, color = Color.Gray)
+                    val compiled = XPCompiled.registry?.components?.keys.orEmpty()
+                    Text(
+                        if (compiled.isEmpty()) "Komponen di bawah dimuat dari ${BuildConfig.XP_URL}"
+                        else "Terkompilasi ke APK: ${compiled.sorted().joinToString()}",
+                        fontSize = 12.sp,
+                        color = Color.Gray,
+                    )
 
                     // Komponen yang sama dengan yang dipakai app Next.js.
                     key(reload) {

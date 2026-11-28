@@ -163,10 +163,12 @@ fun XPView(
         try {
             val compiled = if (live) null else XPCompiled.component(name)
             val engine: XPRuntime = if (compiled != null) {
+                Log.i(TAG, "$name: komponen terkompilasi (Kotlin, tanpa QuickJS)")
                 XPCompiledRuntime(compiled)
             } else {
                 val bundle = XPLoader.load(base, name, publicKey)
                 holder.file = bundle.file
+                Log.i(TAG, "$name: bundle ${bundle.file} dari $base (QuickJS)")
                 XPEngineRuntime(XPEngine.create(bundle.code, bundle.file))
             }
             if (holder.disposed) {
