@@ -53,7 +53,7 @@ def fetch = tasks.register("xpComponents") {
             throw new GradleException("xp: gagal mengambil ${remote}/manifest.json: ${e.message}", e)
         }
         def components = manifest.components ?: [:]
-        def names = wanted ? wanted.collect { it.toString() } : components.findAll { it.value.kotlin }.keySet().sort()
+        def names = wanted ? wanted.collect { it.toString() } : components.findAll { it.value.native }.keySet().sort()
         def entries = []
         def files = [:]
         names.each { name ->
@@ -86,7 +86,7 @@ ${lines}
     )
 }
 """
-        logger.lifecycle("xp: ${entries.size} komponen native dari ${remote}" + (entries ? ": ${entries*.name.join(', ')}" : ""))
+        logger.lifecycle("xp: ${entries.size} komponen native dari ${remote} (manifest ${manifest.builtAt})" + (entries ? ": ${entries*.name.join(', ')}" : ""))
     }
 }
 

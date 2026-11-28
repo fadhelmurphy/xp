@@ -84,7 +84,7 @@ do {
 }
 
 let components = manifest["components"] as? [String: [String: Any]] ?? [:]
-let names = wanted.isEmpty ? components.filter { $0.value["swift"] != nil }.keys.sorted() : wanted
+let names = wanted.isEmpty ? components.filter { $0.value["native"] != nil }.keys.sorted() : wanted
 var sources: [String] = []
 var entries: [String] = []
 for name in names {
@@ -122,4 +122,4 @@ if (try? String(contentsOf: output, encoding: .utf8)) != text {
     try FileManager.default.createDirectory(at: output.deletingLastPathComponent(), withIntermediateDirectories: true)
     try text.write(to: output, atomically: true, encoding: .utf8)
 }
-print("xp: \(entries.count) komponen native dari \(remote)" + (entries.isEmpty ? "" : ": " + names.filter { n in entries.contains { $0.contains("\"\(n)\"") } }.joined(separator: ", ")))
+print("xp: \(entries.count) komponen native dari \(remote) (manifest \(manifest["builtAt"] ?? "?"))" + (entries.isEmpty ? "" : ": " + names.filter { n in entries.contains { $0.contains("\"\(n)\"") } }.joined(separator: ", ")))
