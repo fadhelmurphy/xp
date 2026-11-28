@@ -23,6 +23,7 @@ import { xpClassTable } from "./tailwind-xp.mjs";
 import { buildWeb, detectKind } from "./web.mjs";
 import { compileKotlin, kotlinName } from "./native-kotlin.mjs";
 import { compileSwift, swiftName } from "./native-swift.mjs";
+import { compileTypedKotlin, typedName } from "./native-typed.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const RUNTIME = path.resolve(here, "..", "runtime");
@@ -318,10 +319,21 @@ export async function runBuild({ srcDir, outDir, jobs, clean = false, projectDir
       delete record.swift;
       if (outputs.includes("native")) {
         const plugins = () => (classes ? [classNamePlugin(classes, { runtimeDir: RUNTIME, native: true })] : []);
+        // Kotlin bertipe kalau bisa (lebih cepat), kalau tidak versi dinamis.
+        let typed = null;
+        if (process.env.XP_NATIVE_MODE !== "dynamic") {
+          try {
+            typed = compileTypedKotlin({ file, name, projectDir, classes });
+          } catch (e) {
+            const lines = String(e.message).split("\n");
+            warnings.push(`Kotlin memakai mode dinamis, belum bisa mode typed:\n      ${lines.slice(0, 3).join("\n      ")}${lines.length > 3 ? `\n      (+${lines.length - 3} lagi)` : ""}`);
+          }
+        }
         try {
-          const kt = await compileKotlin({ file, name, projectDir, plugins: plugins() });
+          const kt = typed ? { code: typed.code } : await compileKotlin({ file, name, projectDir, plugins: plugins() });
           const sw = await compileSwift({ file, name, projectDir, plugins: plugins() });
-          for (const [key, ext, code, extra] of [["kotlin", "kt", kt.code, { object: kotlinName(name) }], ["swift", "swift", sw.code, { type: swiftName(name) }]]) {
+          const ktExtra = typed ? { object: typedName(name), typed: true } : { object: kotlinName(name) };
+          for (const [key, ext, code, extra] of [["kotlin", "kt", kt.code, ktExtra], ["swift", "swift", sw.code, { type: swiftName(name) }]]) {
             const hash = sha(code);
             const fileName = `${name}.${key}.${hash.slice(0, 10)}.${ext}`;
             written.push([fileName, code]);

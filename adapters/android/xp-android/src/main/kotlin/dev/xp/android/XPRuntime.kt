@@ -5,6 +5,8 @@ import dev.xp.android.compiled.JsConsole
 import dev.xp.android.compiled.XPCompiledComponent
 import dev.xp.android.compiled.XPComponentRegistry
 import dev.xp.android.compiled.XPComponentRuntime
+import dev.xp.android.typed.XPTypedComponent
+import dev.xp.android.typed.XPTypedRegistry
 import kotlinx.coroutines.ExecutorCoroutineDispatcher
 import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.withContext
@@ -94,4 +96,15 @@ object XPCompiled {
     }
 
     fun component(name: String): XPCompiledComponent? = registry?.components?.get(name)
+
+    /** Komponen mode typed (Kotlin bertipe), dari `dev.xp.generated.XPTypedComponents`. */
+    val typedRegistry: XPTypedRegistry? by lazy {
+        try {
+            Class.forName("dev.xp.generated.XPTypedComponents").getField("INSTANCE").get(null) as? XPTypedRegistry
+        } catch (_: ClassNotFoundException) {
+            null
+        }
+    }
+
+    fun typed(name: String): XPTypedComponent? = typedRegistry?.components?.get(name)
 }

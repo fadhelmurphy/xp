@@ -31,7 +31,11 @@ before(async () => {
   dist = path.join(work, "dist");
   for (const dir of new Set(Object.values(COMPONENTS))) {
     const only = Object.keys(COMPONENTS).filter((n) => COMPONENTS[n] === dir).join(",");
-    execFileSync(process.execPath, ["cli/xp.mjs", "build", dir, "--only", only, "--out", dist, "--yes"], { cwd: ROOT, stdio: "pipe" });
+    execFileSync(process.execPath, ["cli/xp.mjs", "build", dir, "--only", only, "--out", dist, "--yes"], {
+      cwd: ROOT,
+      stdio: "pipe",
+      env: { ...process.env, XP_NATIVE_MODE: "dynamic" },
+    });
   }
   // File .kt yang sama dengan yang diunduh task Gradle xpComponents.
   const manifest = JSON.parse(readFileSync(path.join(dist, "manifest.json"), "utf8"));

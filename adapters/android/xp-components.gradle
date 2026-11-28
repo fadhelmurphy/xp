@@ -66,27 +66,33 @@ def fetch = tasks.register("xpComponents") {
             def bytes = open("${remote}/${c.kotlin.file}")
             if (sha256(bytes) != c.kotlin.sha256) throw new GradleException("xp: isi ${c.kotlin.file} tidak cocok dengan sha256 di manifest")
             files[c.kotlin.file] = bytes
-            entries << [name: name, object: c.kotlin.object]
+            entries << [name: name, object: c.kotlin.object, typed: c.kotlin.typed == true]
         }
 
         def pkg = new File(outDir, "dev/xp/generated")
         project.delete(outDir)
         pkg.mkdirs()
         files.each { file, bytes -> new File(pkg, file).bytes = bytes }
-        def lines = entries.collect { "        \"${it.name}\" to ${it.object}," }.join("\n")
+        // Dua registry: Kotlin bertipe (mode typed) dan dinamis. Keduanya selalu ada, boleh kosong.
+        def mapOf = { list -> list ? "mapOf(\n" + list.collect { "        \"${it.name}\" to ${it.object}," }.join("\n") + "\n    )" : "emptyMap()" }
         new File(pkg, "XPComponents.kt").text = """// Dibuat oleh task xpComponents dari ${remote}. Jangan diubah manual.
 package dev.xp.generated
 
 import dev.xp.android.compiled.XPCompiledComponent
 import dev.xp.android.compiled.XPComponentRegistry
+import dev.xp.android.typed.XPTypedComponent
+import dev.xp.android.typed.XPTypedRegistry
 
 object XPComponents : XPComponentRegistry {
-    override val components: Map<String, XPCompiledComponent> = mapOf(
-${lines}
-    )
+    override val components: Map<String, XPCompiledComponent> = ${mapOf(entries.findAll { !it.typed })}
+}
+
+object XPTypedComponents : XPTypedRegistry {
+    override val components: Map<String, XPTypedComponent> = ${mapOf(entries.findAll { it.typed })}
 }
 """
-        logger.lifecycle("xp: ${entries.size} komponen native dari ${remote} (manifest ${manifest.builtAt})" + (entries ? ": ${entries*.name.join(', ')}" : ""))
+        def label = { e -> e.typed ? "${e.name} (typed)" : e.name }
+        logger.lifecycle("xp: ${entries.size} komponen native dari ${remote} (manifest ${manifest.builtAt})" + (entries ? ": ${entries.collect(label).join(', ')}" : ""))
     }
 }
 

@@ -83,6 +83,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -108,6 +109,8 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import coil3.compose.AsyncImage
+import dev.xp.android.typed.XPTypedComponent
+import dev.xp.android.typed.XPTypedRuntime
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
@@ -120,9 +123,10 @@ private const val TAG = "XP"
 /**
  * Merender komponen xp dengan Jetpack Compose (tanpa WebView).
  *
- * Kalau komponen ikut dikompilasi ke app (task Gradle `xpComponents`),
- * yang dipakai adalah versi Kotlin-nya, tanpa unduhan dan tanpa engine JS. Kalau tidak, atau saat `live`,
- * bundle dimuat dari URL dan dijalankan di QuickJS.
+ * Kalau komponen ikut dikompilasi ke app (task Gradle `xpComponents`), yang dipakai adalah versi
+ * Kotlin-nya, tanpa unduhan dan tanpa engine JS: kode Kotlin bertipe (mode typed) kalau komponennya
+ * bisa, atau versi dinamis. Kalau tidak ada, atau saat `live`, bundle dimuat dari URL dan dijalankan
+ * di QuickJS.
  *
  *     XPView(base = "https://cdn.kamu/xp", name = "promo-modal",
  *            props = mapOf("title" to "Kelas IELTS", "price" to 150000))
@@ -146,6 +150,11 @@ fun XPView(
     /** View native milik app yang bisa dipakai komponen lewat `<NativeView name="...">`. */
     nativeViews: Map<String, XPNativeView> = emptyMap(),
 ) {
+    val typed = if (live) null else remember(name) { XPCompiled.typed(name) }
+    if (typed != null) {
+        XPTypedView(typed, props, modifier, nativeViews, error)
+        return
+    }
     val propsJson = remember(props) { XPJson.stringify(props) }
     val scope = rememberCoroutineScope()
     val holder = remember(base, name) { XPHolder(scope) }
@@ -252,12 +261,89 @@ fun XPView(
             is XPState.Failed -> error(s.error)
             XPState.Ready -> {
                 // ctx baru setiap revisi → Compose merender ulang node yang berubah.
-                val ctx = XPRenderCtx(holder.tree, holder.revision, holder.mountRevision, dispatch, nativeViews)
+                val ctx = XPRenderCtx(holder.revision, holder.mountRevision, nativeViews)
+                val tree = holder.tree
                 Column(Modifier.fillMaxWidth()) {
                     val slot = Slot.InColumn(this, stretch = true)
-                    holder.tree.root.children.forEach { key(it) { XPNodeView(ctx, it, slot) } }
+                    tree.root.children.forEach { key(it) { XPNodeView(ctx, XPTreeRNode(tree, tree[it], dispatch), slot) } }
                 }
             }
+        }
+    }
+}
+
+/**
+ * Komponen mode typed: kode Kotlin bertipe dijalankan langsung di main thread, tree host-nya
+ * dirender tanpa operasi UI dan tanpa XPTree.
+ */
+@Composable
+private fun XPTypedView(
+    component: XPTypedComponent,
+    props: Map<String, Any?>,
+    modifier: Modifier,
+    nativeViews: Map<String, XPNativeView>,
+    error: @Composable (Throwable) -> Unit,
+) {
+    val rt = remember(component) { XPTypedRuntime(component) }
+    var revision by remember(rt) { mutableIntStateOf(0) }
+    var mountRevision by remember(rt) { mutableIntStateOf(-1) }
+    var failure by remember(rt) { mutableStateOf<Throwable?>(null) }
+    val config = LocalConfiguration.current
+    val dark = isSystemInDarkTheme()
+
+    fun guard(block: () -> Unit) {
+        try {
+            block()
+        } catch (t: Throwable) {
+            Log.e(TAG, "${component.name} gagal", t)
+            failure = t
+        }
+    }
+
+    DisposableEffect(rt) {
+        val main = android.os.Handler(android.os.Looper.getMainLooper())
+        rt.onCommit = { revision = rt.revision }
+        rt.onInvalidate = { main.post { guard { rt.flush() } } }
+        onDispose {
+            main.removeCallbacksAndMessages(null)
+            guard { rt.unmount() }
+        }
+    }
+    // Ukuran layar & mode gelap dulu, baru mount (sama dengan urutan di bundle JS).
+    LaunchedEffect(rt, config.screenWidthDp, config.screenHeightDp, dark) {
+        guard { rt.environment(config.screenWidthDp.toDouble(), config.screenHeightDp.toDouble(), dark) }
+    }
+    LaunchedEffect(rt, props) {
+        guard {
+            if (mountRevision < 0) {
+                Log.i(TAG, "${component.name}: Kotlin bertipe (mode typed)")
+                rt.mount(props)
+                mountRevision = rt.revision
+            } else {
+                rt.update(props)
+            }
+        }
+    }
+    // setTimeout / setInterval komponen.
+    LaunchedEffect(rt, revision) {
+        while (true) {
+            val wait = rt.nextTimer()
+            if (wait < 0) break
+            delay(wait)
+            guard { rt.tick() }
+        }
+    }
+
+    Box(modifier) {
+        failure?.let {
+            error(it)
+            return@Box
+        }
+        if (mountRevision < 0) return@Box
+        val ctx = XPRenderCtx(revision, mountRevision, nativeViews)
+        Column(Modifier.fillMaxWidth()) {
+            val slot = Slot.InColumn(this, stretch = true)
+            rt.root.forEach { key(it.id) { XPNodeView(ctx, XPTypedRNode(rt, it), slot) } }
         }
     }
 }
@@ -350,11 +436,9 @@ private class XPHolder(private val scope: CoroutineScope) {
 }
 
 private data class XPRenderCtx(
-    val tree: XPTree,
     val revision: Int,
     /** Revisi setelah mount; node yang dibuat sesudahnya boleh menjalankan animasi `entering`. */
     val mountRevision: Int,
-    val dispatch: (String, List<Any?>) -> Unit,
     val nativeViews: Map<String, XPNativeView>,
 )
 
@@ -586,7 +670,7 @@ private fun animated(s: XPStyle): XPStyle {
 
 /** Prop `entering`: node yang muncul setelah mount bergerak dari nilai awal ke posisi normal. */
 @Composable
-private fun Modifier.entering(node: XPNode, ctx: XPRenderCtx): Modifier {
+private fun Modifier.entering(node: XPRNode, ctx: XPRenderCtx): Modifier {
     val e = node.entering()
     val play = e != null && node.createdAt > ctx.mountRevision
     val progress = remember(node.id) { Animatable(if (play) 0f else 1f) }
@@ -607,27 +691,27 @@ private fun Modifier.entering(node: XPNode, ctx: XPRenderCtx): Modifier {
  * dragAxis: selama digeser elemen ikut jari di sumbu itu, lalu kembali saat dilepas.
  */
 @Composable
-private fun Modifier.swipe(node: XPNode, ctx: XPRenderCtx): Modifier {
-    val key = node.handler("onSwipe")
+private fun Modifier.swipe(node: XPRNode): Modifier {
+    val handler = node.handler("onSwipe")
     val axis = node.string("dragAxis")
-    if (key == null && axis == null) return this
+    // Handler terbaru dipakai tanpa memulai ulang detektor gesture setiap render.
+    val onSwipe by rememberUpdatedState(handler)
+    if (handler == null && axis == null) return this
+    val hasHandler = handler != null
     val offset = remember(node.id) { Animatable(Offset.Zero, Offset.VectorConverter) }
     val scope = rememberCoroutineScope()
-    val dispatch = ctx.dispatch
     val back = { scope.launch { offset.animateTo(Offset.Zero, tween(200)) } }
     return this
         .graphicsLayer {
             translationX = offset.value.x
             translationY = offset.value.y
         }
-        .pointerInput(key, axis) {
+        .pointerInput(node.id, hasHandler, axis) {
             var total = Offset.Zero
             detectDragGestures(
                 onDragStart = { total = Offset.Zero },
                 onDragEnd = {
-                    if (key != null) {
-                        XPGesture.direction(total.x.toDp().value, total.y.toDp().value)?.let { dispatch(key, listOf(it)) }
-                    }
+                    XPGesture.direction(total.x.toDp().value, total.y.toDp().value)?.let { dir -> onSwipe?.invoke(listOf(dir)) }
                     back()
                 },
                 onDragCancel = { back() },
@@ -642,7 +726,7 @@ private fun Modifier.swipe(node: XPNode, ctx: XPRenderCtx): Modifier {
         }
 }
 
-private fun Modifier.testTagOf(node: XPNode): Modifier = node.string("testID")?.let { this.testTag(it) } ?: this
+private fun Modifier.testTagOf(node: XPRNode): Modifier = node.string("testID")?.let { this.testTag(it) } ?: this
 
 /** scale/translate/rotate dan animate-spin/pulse/bounce/ping. */
 @Composable
@@ -692,8 +776,7 @@ private fun Modifier.xpTransform(s: XPStyle): Modifier {
 // --- pemetaan primitive → Compose ---
 
 @Composable
-private fun XPNodeView(ctx: XPRenderCtx, id: Int, slot: Slot) {
-    val node = ctx.tree[id]
+private fun XPNodeView(ctx: XPRenderCtx, node: XPRNode, slot: Slot) {
     // Keadaan elemen untuk pressedStyle / focusStyle / hoverStyle (varian className active:, focus:, hover:).
     val interaction = remember(node.id) { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
@@ -710,19 +793,19 @@ private fun XPNodeView(ctx: XPRenderCtx, id: Int, slot: Slot) {
     val base = slot.modifier(style).testTagOf(node).entering(node, ctx).xpTransform(style).then(hover)
 
     when (node.type) {
-        "View" -> XPContainer(ctx, node, style, base.swipe(node, ctx))
+        "View" -> XPContainer(ctx, node, style, base.swipe(node))
         "Pressable" -> {
-            val key = node.handler("onPress")
-            val click = if (key != null) {
+            val onPress = node.handler("onPress")
+            val click = if (onPress != null) {
                 Modifier.clickable(
                     interactionSource = interaction,
                     indication = LocalIndication.current,
                     enabled = !node.bool("disabled"),
-                ) { ctx.dispatch(key, emptyList()) }
+                ) { onPress(emptyList()) }
             } else {
                 Modifier
             }
-            XPContainer(ctx, node, style, base.swipe(node, ctx), click)
+            XPContainer(ctx, node, style, base.swipe(node), click)
         }
         "ScrollView" -> {
             val horizontal = node.bool("horizontal")
@@ -749,12 +832,12 @@ private fun XPNodeView(ctx: XPRenderCtx, id: Int, slot: Slot) {
                 // Tidak didaftarkan app: tampilkan children (pengganti), sama seperti di web.
                 XPContainer(ctx, node, style, base)
             } else {
-                val key = node.handler("onEvent")
+                val onEvent = node.handler("onEvent")
                 @Suppress("UNCHECKED_CAST")
                 val scope = XPNativeScope(
                     props = node.props["props"] as? Map<String, Any?> ?: emptyMap(),
                     modifier = base.xpBox(style),
-                ) { event, data -> key?.let { ctx.dispatch(it, listOf(event, data)) } }
+                ) { event, data -> onEvent?.invoke(listOf(event, data)) }
                 factory(scope)
             }
         }
@@ -767,9 +850,9 @@ private fun XPNodeView(ctx: XPRenderCtx, id: Int, slot: Slot) {
  * kotak container, di luar padding), sisanya mengalir sebagai flex/grid.
  */
 @Composable
-private fun XPContainer(ctx: XPRenderCtx, node: XPNode, style: XPStyle, modifier: Modifier, interaction: Modifier = Modifier) {
+private fun XPContainer(ctx: XPRenderCtx, node: XPRNode, style: XPStyle, modifier: Modifier, interaction: Modifier = Modifier) {
     val all = node.children
-    val absolute = all.filter { XPStyle.parse(ctx.tree[it].style()).absolute }
+    val absolute = all.filter { XPStyle.parse(it.style()).absolute }
     val flow = if (absolute.isEmpty()) all else all - absolute.toSet()
     if (absolute.isEmpty()) {
         XPFlow(ctx, style, if (style.reverse) flow.reversed() else flow, modifier.xpBox(style, interaction))
@@ -777,20 +860,20 @@ private fun XPContainer(ctx: XPRenderCtx, node: XPNode, style: XPStyle, modifier
     }
     Box(modifier.xpBox(style, interaction, withPadding = false)) {
         XPFlow(ctx, style, if (style.reverse) flow.reversed() else flow, Modifier.xpPadding(style))
-        for (child in absolute) key(child) { XPAbsolute(ctx, child, Modifier.matchParentSize()) }
+        for (child in absolute) key(child.id) { XPAbsolute(ctx, child, Modifier.matchParentSize()) }
     }
 }
 
 /** Isi container: kolom, baris, atau grid; garis pemisah (divide-*) dan margin auto di antaranya. */
 @Composable
-private fun XPFlow(ctx: XPRenderCtx, style: XPStyle, children: List<Int>, modifier: Modifier) {
+private fun XPFlow(ctx: XPRenderCtx, style: XPStyle, children: List<XPRNode>, modifier: Modifier) {
     if (style.display == "grid") {
         XPGrid(ctx, style, children, modifier)
         return
     }
     val divider = style.dividerWidth > 0f
     val dividerColor = Color(style.dividerColor ?: style.color ?: 0xFFE5E7EBL)
-    val autos = children.map { XPStyle.parse(ctx.tree[it].style()).autoMargin }
+    val autos = children.map { XPStyle.parse(it.style()).autoMargin }
     if (style.isRow) {
         Row(
             if (divider) modifier.height(IntrinsicSize.Min) else modifier,
@@ -800,7 +883,7 @@ private fun XPFlow(ctx: XPRenderCtx, style: XPStyle, children: List<Int>, modifi
             val slot = Slot.InRow(this)
             children.forEachIndexed { i, c ->
                 if ("start" in autos[i] && "end" !in autos[i]) Spacer(Modifier.weight(1f))
-                key(c) { XPNodeView(ctx, c, slot) }
+                key(c.id) { XPNodeView(ctx, c, slot) }
                 if ("end" in autos[i] && "start" !in autos[i]) Spacer(Modifier.weight(1f))
                 if (divider && i < children.size - 1) Box(Modifier.width(style.dividerWidth.dp).fillMaxHeight().background(dividerColor))
             }
@@ -810,7 +893,7 @@ private fun XPFlow(ctx: XPRenderCtx, style: XPStyle, children: List<Int>, modifi
             val slot = Slot.InColumn(this, stretch = style.alignItems == "stretch")
             children.forEachIndexed { i, c ->
                 if ("top" in autos[i] && "bottom" !in autos[i]) Spacer(Modifier.weight(1f))
-                key(c) { XPNodeView(ctx, c, slot) }
+                key(c.id) { XPNodeView(ctx, c, slot) }
                 if ("bottom" in autos[i] && "top" !in autos[i]) Spacer(Modifier.weight(1f))
                 if (divider && i < children.size - 1) Box(Modifier.fillMaxWidth().height(style.dividerWidth.dp).background(dividerColor))
             }
@@ -820,12 +903,12 @@ private fun XPFlow(ctx: XPRenderCtx, style: XPStyle, children: List<Int>, modifi
 
 /** display: grid → baris-baris berisi `gridColumns` sel sama lebar; gridColumnSpan memakai beberapa sel. */
 @Composable
-private fun XPGrid(ctx: XPRenderCtx, style: XPStyle, children: List<Int>, modifier: Modifier) {
+private fun XPGrid(ctx: XPRenderCtx, style: XPStyle, children: List<XPRNode>, modifier: Modifier) {
     val cols = style.gridColumns
-    val rows = ArrayList<MutableList<Pair<Int, Int>>>()
+    val rows = ArrayList<MutableList<Pair<XPRNode, Int>>>()
     var used = cols
     for (c in children) {
-        val span = XPStyle.parse(ctx.tree[c].style()).gridColumnSpan.let { if (it < 0) cols else it.coerceIn(1, cols) }
+        val span = XPStyle.parse(c.style()).gridColumnSpan.let { if (it < 0) cols else it.coerceIn(1, cols) }
         if (used + span > cols) {
             rows.add(ArrayList())
             used = 0
@@ -838,7 +921,7 @@ private fun XPGrid(ctx: XPRenderCtx, style: XPStyle, children: List<Int>, modifi
             Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy((style.columnGap ?: style.gap).dp)) {
                 for ((c, span) in row) {
                     Box(Modifier.weight(span.toFloat()).fillMaxHeight(), propagateMinConstraints = true) {
-                        key(c) { XPNodeView(ctx, c, Slot.Free) }
+                        key(c.id) { XPNodeView(ctx, c, Slot.Free) }
                     }
                 }
                 val rest = cols - row.sumOf { it.second }
@@ -850,9 +933,9 @@ private fun XPGrid(ctx: XPRenderCtx, style: XPStyle, children: List<Int>, modifi
 
 /** Anak position: absolute: top/right/bottom/left (dp atau % dari ukuran container). */
 @Composable
-private fun XPAbsolute(ctx: XPRenderCtx, id: Int, modifier: Modifier) {
-    val s = XPStyle.parse(ctx.tree[id].style())
-    Layout(content = { XPNodeView(ctx, id, Slot.Free) }, modifier = modifier) { measurables, constraints ->
+private fun XPAbsolute(ctx: XPRenderCtx, node: XPRNode, modifier: Modifier) {
+    val s = XPStyle.parse(node.style())
+    Layout(content = { XPNodeView(ctx, node, Slot.Free) }, modifier = modifier) { measurables, constraints ->
         val w = constraints.maxWidth
         val h = constraints.maxHeight
         fun px(v: XPSize?, full: Int): Int? = when (v) {
@@ -928,10 +1011,10 @@ private fun fontFamilyOf(name: String?): FontFamily? = when (name) {
 }
 
 @Composable
-private fun XPText(ctx: XPRenderCtx, node: XPNode, style: XPStyle, base: Modifier) {
+private fun XPText(ctx: XPRenderCtx, node: XPRNode, style: XPStyle, base: Modifier) {
     val lines = (node.props["numberOfLines"] as? Number)?.toInt() ?: style.lineClamp ?: if (style.noWrap) 1 else null
     Text(
-        text = style.transform(ctx.tree.text(node)),
+        text = style.transform(node.text()),
         modifier = base.xpBox(style),
         color = style.color?.let { Color(it) } ?: Color.Unspecified,
         fontSize = (style.fontSize ?: 16f).sp,
@@ -958,18 +1041,18 @@ private fun XPText(ctx: XPRenderCtx, node: XPNode, style: XPStyle, base: Modifie
 }
 
 @Composable
-private fun XPTextInput(ctx: XPRenderCtx, node: XPNode, style: XPStyle, base: Modifier, interaction: MutableInteractionSource) {
+private fun XPTextInput(ctx: XPRenderCtx, node: XPRNode, style: XPStyle, base: Modifier, interaction: MutableInteractionSource) {
     val external = node.string("value") ?: ""
     var local by remember(node.id) { mutableStateOf(external) }
     LaunchedEffect(external) { if (external != local) local = external } // nilai dari JS menang
-    val key = node.handler("onChangeText")
+    val onChange = node.handler("onChangeText")
     val textColor = style.color?.let { Color(it) } ?: Color(0xFF1F2328)
     val fontSize = (style.fontSize ?: 16f).sp
     BasicTextField(
         value = local,
         onValueChange = { text ->
             local = text
-            key?.let { ctx.dispatch(it, listOf(text)) }
+            onChange?.invoke(listOf(text))
         },
         modifier = base.xpBox(style),
         textStyle = TextStyle(color = textColor, fontSize = fontSize),
@@ -986,18 +1069,18 @@ private fun XPTextInput(ctx: XPRenderCtx, node: XPNode, style: XPStyle, base: Mo
 }
 
 @Composable
-private fun XPModal(ctx: XPRenderCtx, node: XPNode) {
+private fun XPModal(ctx: XPRenderCtx, node: XPRNode) {
     if (!node.bool("visible")) return
     val close = node.handler("onRequestClose")
     // Dialog Android: backdrop gelap + tombol back/klik luar → onRequestClose.
     Dialog(
-        onDismissRequest = { close?.let { ctx.dispatch(it, emptyList()) } },
+        onDismissRequest = { close?.invoke(emptyList()) },
         properties = DialogProperties(usePlatformDefaultWidth = false),
     ) {
         Box(Modifier.fillMaxWidth().padding(16.dp).testTagOf(node), contentAlignment = Alignment.Center) {
             Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
                 val slot = Slot.InColumn(this, stretch = false)
-                node.children.forEach { key(it) { XPNodeView(ctx, it, slot) } }
+                node.children.forEach { key(it.id) { XPNodeView(ctx, it, slot) } }
             }
         }
     }
