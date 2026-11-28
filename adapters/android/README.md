@@ -22,7 +22,9 @@ XPView(base = "http://10.0.2.2:4400", name = "promo-slider", live = BuildConfig.
 
 ## Memakai di project yang sudah ada
 
-Syarat: minSdk 24 ke atas, Kotlin 2.x. SDK ini belum terbit di Maven, jadi modulnya disambungkan langsung dari folder repo `xp`.
+Syarat: minSdk 24 ke atas, compileSdk 36, Kotlin 2.x, dan Compose aktif di modul app. SDK ini belum terbit di Maven, jadi modulnya disambungkan langsung dari folder repo `xp`.
+
+Untuk tim, jadikan repo `xp` git submodule di dalam project app (`git submodule add https://github.com/fadhelmurphy/xp xp`), supaya path di bawah bisa relatif (`file("xp/adapters/android/xp-android")`) dan sama di semua laptop.
 
 **1. `settings.gradle.kts`**
 ```kotlin
@@ -30,10 +32,12 @@ include(":xp-android")
 project(":xp-android").projectDir = file("C:/path/ke/xp/adapters/android/xp-android")
 ```
 
-**2. `build.gradle.kts` (root).** Tambahkan plugin library dengan versi yang sama dengan `com.android.application` di project kamu:
+**2. `build.gradle.kts` (root).** Tambahkan plugin yang dipakai modul SDK, dengan versi yang sama dengan yang sudah ada di project kamu (lewati yang sudah ada):
 ```kotlin
 plugins {
-    id("com.android.library") version "<versi AGP yang sama>" apply false
+    id("com.android.library") version "<versi AGP project>" apply false
+    id("org.jetbrains.kotlin.android") version "<versi Kotlin project>" apply false
+    id("org.jetbrains.kotlin.plugin.compose") version "<versi Kotlin project>" apply false
 }
 ```
 
@@ -52,6 +56,7 @@ XPView(
     base = "https://cdn.kamu/xp", // folder dist/ hasil `xp build`
     name = "promo-modal",
     props = mapOf("title" to "Kelas IELTS", "price" to 150000),
+    live = BuildConfig.DEBUG,     // debug: dari URL + xp dev; release: versi native di APK
 )
 ```
 
@@ -68,7 +73,9 @@ findViewById<ComposeView>(R.id.promo).setContent {
 }
 ```
 
-**5. Production**
+**5. Komponen native di APK.** Di `app/build.gradle.kts`, di bawah blok `plugins { }`, lihat [Komponen native di build release](#komponen-native-di-build-release). Untuk mencoba dengan `xp serve` lokal, pakai `http://127.0.0.1:4400` (bukan `localhost`, yang di Windows bisa nyasar ke server lain lewat IPv6).
+
+**6. Production**
 - Sajikan `dist/` lewat https (CDN atau bucket). `android:usesCleartextTraffic="true"` hanya perlu saat mencoba remote lokal lewat `http://`.
 - Tanda tangani bundle supaya app hanya menerima komponen dari kamu: `npx github:fadhelmurphy/xp keygen`, lalu `npx github:fadhelmurphy/xp build src --sign`, dan isi `publicKey` di `XPView`.
 - Saat development, `live = BuildConfig.DEBUG` bersama `xp dev` membuat app memuat ulang setiap ada build baru.
@@ -87,6 +94,7 @@ apply(from = "C:/path/ke/xp/adapters/android/xp-components.gradle")
 `XPView` tidak perlu diubah. Kalau komponen ada di build, versi Kotlin yang dipakai. Kalau tidak ada, komponen dimuat dari `base` seperti biasa. `live = true` selalu memakai bundle dari URL supaya `xp dev` tetap bisa dipakai.
 
 - Task ini jalan sebelum setiap build (`preBuild`) dan selalu mengecek `manifest.json` terbaru. Isi setiap file dicek dengan `sha256` di manifest. Kalau CDN tidak bisa dihubungi, hasil unduhan sebelumnya yang dipakai.
+- Cek berhasil: Build Output berisi `xp: N komponen native dari ... (manifest <waktu build>)`, dan Logcat `tag:XPView` menulis `komponen terkompilasi (Kotlin, tanpa QuickJS)`. Paling meyakinkan: force stop app, nyalakan airplane mode, buka lagi; komponen native tetap tampil.
 - Komponen baru di CDN baru masuk ke app di build berikutnya. Ini memang aturan Play Store dan App Store: kode native tidak boleh diunduh saat runtime.
 - Komponen yang memakai fitur JS di luar jangkauan compiler (lihat [Kompilasi ke native](../../docs/runtime.md#kompilasi-ke-native)) tidak punya versi Kotlin. `xp build` memberi peringatan dan menyebut lokasinya, task Gradle juga, dan di app komponen itu tetap dimuat dari URL.
 - R8/ProGuard: aturan keep sudah ikut dari `consumer-rules.pro` SDK.
