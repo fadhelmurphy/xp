@@ -22,6 +22,7 @@ import { classNamePlugin, webClassTable } from "./classname.mjs";
 import { xpClassTable } from "./tailwind-xp.mjs";
 import { buildWeb, detectKind } from "./web.mjs";
 import { compileKotlin, kotlinName } from "./native-kotlin.mjs";
+import { compileSwift, swiftName } from "./native-swift.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const RUNTIME = path.resolve(here, "..", "runtime");
@@ -310,26 +311,32 @@ export async function runBuild({ srcDir, outDir, jobs, clean = false, projectDir
         }
       }
 
-      // Versi Kotlin untuk dikompilasi ke dalam app Android (task Gradle xpComponents).
-      // Komponen yang memakai fitur JS di luar jangkauan compiler tetap jalan lewat bundle native.
+      // Versi Kotlin dan Swift untuk dikompilasi ke dalam app (task Gradle xpComponents di Android,
+      // build phase di iOS). Komponen yang memakai fitur JS di luar jangkauan compiler tetap jalan
+      // lewat bundle native; kedua compiler menolak fitur yang sama, jadi cukup satu peringatan.
       delete record.kotlin;
+      delete record.swift;
       if (outputs.includes("native")) {
+        const plugins = () => (classes ? [classNamePlugin(classes, { runtimeDir: RUNTIME, native: true })] : []);
         try {
-          const plugins = classes ? [classNamePlugin(classes, { runtimeDir: RUNTIME, native: true })] : [];
-          const kt = await compileKotlin({ file, name, projectDir, plugins });
-          const hash = sha(kt.code);
-          const fileName = `${name}.kotlin.${hash.slice(0, 10)}.kt`;
-          written.push([fileName, kt.code]);
-          record.kotlin = { file: fileName, bytes: kt.code.length, sha256: hash, object: kotlinName(name) };
+          const kt = await compileKotlin({ file, name, projectDir, plugins: plugins() });
+          const sw = await compileSwift({ file, name, projectDir, plugins: plugins() });
+          for (const [key, ext, code, extra] of [["kotlin", "kt", kt.code, { object: kotlinName(name) }], ["swift", "swift", sw.code, { type: swiftName(name) }]]) {
+            const hash = sha(code);
+            const fileName = `${name}.${key}.${hash.slice(0, 10)}.${ext}`;
+            written.push([fileName, code]);
+            record[key] = { file: fileName, bytes: code.length, sha256: hash, ...extra };
+          }
         } catch (e) {
-          warnings.push(`belum bisa dikompilasi ke Kotlin (Android tetap memakai bundle native):\n      ${String(e.message).split("\n").join("\n      ")}`);
+          delete record.kotlin;
+          warnings.push(`belum bisa dikompilasi ke kode native (app tetap memakai bundle JS):\n      ${String(e.message).split("\n").join("\n      ")}`);
         }
       }
 
       // Hapus file versi lama komponen ini, lalu tulis yang baru.
       const old = manifest.components[name];
       if (old) {
-        const oldFiles = [old.types, old.web?.file, old.ssr?.file, old.native?.file, old.kotlin?.file].filter(Boolean);
+        const oldFiles = [old.types, old.web?.file, old.ssr?.file, old.native?.file, old.kotlin?.file, old.swift?.file].filter(Boolean);
         const keep = new Set(written.map(([f]) => f));
         await Promise.all(oldFiles.filter((f) => !keep.has(f)).map((f) => rm(path.join(outDir, f), { force: true })));
       }

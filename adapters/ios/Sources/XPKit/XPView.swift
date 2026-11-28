@@ -8,7 +8,11 @@ import AppKit
 
 private let logger = Logger(subsystem: "dev.xp", category: "XPKit")
 
-/// Memuat komponen xp dari URL dan merendernya dengan SwiftUI (tanpa WebView).
+/// Merender komponen xp dengan SwiftUI (tanpa WebView).
+///
+/// Kalau komponen ikut dikompilasi ke app (script `xp-components.sh` di build phase), yang dipakai
+/// adalah versi Swift-nya, tanpa unduhan dan tanpa JavaScriptCore. Kalau tidak, atau saat `live`,
+/// bundle dimuat dari URL dan dijalankan di JavaScriptCore.
 ///
 ///     XPView(base: URL(string: "https://cdn.kamu/xp")!, name: "promo-modal",
 ///            props: ["title": "Kelas IELTS", "price": 150000])
@@ -17,6 +21,7 @@ private let logger = Logger(subsystem: "dev.xp", category: "XPKit")
 ///
 /// - `publicKey`: kunci publik dari `xp keygen`; manifest yang tidak ditandatangani kunci ini ditolak.
 /// - `live`: development, sambung ke `xp dev` dan muat ulang setiap build baru (state dipertahankan).
+///   Selalu memakai bundle dari URL walaupun komponen terkompilasi tersedia.
 public struct XPView: View {
     private let base: URL
     private let name: String
@@ -49,7 +54,7 @@ public struct XPView: View {
                 model.setEnvironment(screen: screenSize, dark: colorScheme == .dark)
             }
             .task(id: "\(base.absoluteString)|\(name)") {
-                await model.load(base: base, name: name, propsJSON: propsJSON, publicKey: publicKey)
+                await model.load(base: base, name: name, propsJSON: propsJSON, publicKey: publicKey, live: live)
             }
             .task(id: "\(base.absoluteString)|\(name)|\(live)") {
                 guard live else { return }
@@ -137,7 +142,7 @@ final class XPModel: ObservableObject {
     private(set) var mountRevision = 0
     private(set) var tree = XPTree()
 
-    private var engine: XPEngine?
+    private var engine: XPRuntime?
     private var file: String?
     private var loadedKey: String?
     private var mountedProps: String?
@@ -157,16 +162,21 @@ final class XPModel: ObservableObject {
         }
     }
 
-    func load(base: URL, name: String, propsJSON: String, publicKey: String? = nil) async {
+    func load(base: URL, name: String, propsJSON: String, publicKey: String? = nil, live: Bool = false) async {
         latestProps = propsJSON
         let key = "\(base.absoluteString)|\(name)"
         guard loadedKey != key else { return }
         loadedKey = key
         do {
-            let bundle = try await XPLoader.shared.load(base: base, name: name, publicKey: publicKey)
-            let engine = try await XPEngine.create(bundle: bundle.code, fileName: bundle.file)
+            let engine: XPRuntime
+            if !live, let compiled = XPCompiled.component(name) {
+                engine = XPCompiledRuntime(compiled)
+            } else {
+                let bundle = try await XPLoader.shared.load(base: base, name: name, publicKey: publicKey)
+                engine = XPEngineRuntime(try await XPEngine.create(bundle: bundle.code, fileName: bundle.file))
+                self.file = bundle.file
+            }
             self.engine = engine
-            self.file = bundle.file
             let props = latestProps
             _ = try await engine.environment(screen: environment.screen, dark: environment.dark)
             let batches = try await engine.mount(props)
@@ -183,16 +193,17 @@ final class XPModel: ObservableObject {
 
     /// xp dev: ganti ke bundle baru, state useState dibawa lewat snapshot.
     func reload(base: URL, name: String, publicKey: String?) async {
-        guard case .ready = state else { return }
+        guard case .ready = state, engine is XPEngineRuntime else { return }
         do {
             let bundle = try await XPLoader.shared.load(base: base, name: name, publicKey: publicKey)
             guard bundle.file != file else { return }
             let next = try await XPEngine.create(bundle: bundle.code, fileName: bundle.file)
-            enqueue { old in
+            enqueue { current in
+                guard let old = (current as? XPEngineRuntime)?.engine else { return }
                 let snapshot = try await old.snapshot()
                 _ = try await next.environment(screen: self.environment.screen, dark: self.environment.dark)
                 let batches = try await next.mount(self.latestProps, snapshot: snapshot)
-                self.engine = next
+                self.engine = XPEngineRuntime(next)
                 self.file = bundle.file
                 self.mountedProps = self.latestProps
                 self.tree = XPTree()
@@ -224,7 +235,7 @@ final class XPModel: ObservableObject {
     }
 
     /// Event diproses satu per satu sesuai urutan tap.
-    private func enqueue(_ work: @escaping (XPEngine) async throws -> Void) {
+    private func enqueue(_ work: @escaping (XPRuntime) async throws -> Void) {
         guard let engine else { return }
         let previous = pending
         pending = Task { @MainActor in
@@ -238,7 +249,11 @@ final class XPModel: ObservableObject {
     }
 
     private func apply(_ json: String) throws {
-        try tree.applyBatches(json)
+        try apply(try XPJSON.parse(json) as? [Any] ?? [])
+    }
+
+    private func apply(_ batches: [Any]) throws {
+        try tree.applyBatches(batches)
         revision = tree.revision
         armTimer()
     }

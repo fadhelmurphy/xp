@@ -90,6 +90,11 @@ public final class XPTree {
         guard let batches = try XPJSON.parse(json) as? [Any] else {
             throw XPError.invalid("hasil runtime bukan array batch")
         }
+        try applyBatches(batches)
+    }
+
+    /// Daftar batch yang sudah berupa objek (dari komponen terkompilasi, tanpa JSON).
+    public func applyBatches(_ batches: [Any]) throws {
         if batches.isEmpty { return }
         for batch in batches {
             guard let b = batch as? [String: Any] else { throw XPError.invalid("batch bukan object") }

@@ -23,7 +23,7 @@ const RUNTIME_API = [
 ];
 
 // Global JS yang tersedia di runtime Kotlin.
-const GLOBALS = new Set([
+export const GLOBALS = new Set([
   "Math", "Object", "Array", "JSON", "Number", "String", "Boolean", "console", "Date", "Error", "TypeError",
   "Set", "Map", "NaN", "Infinity", "parseInt", "parseFloat", "isNaN", "isFinite",
   "setTimeout", "setInterval", "clearTimeout", "clearInterval", "__xp",
@@ -45,7 +45,7 @@ export function kotlinName(name) {
 }
 
 /** Bundle komponen jadi satu modul ESM tanpa import, plus sourcemap untuk pesan error. */
-async function bundleForNative(file, extraPlugins = []) {
+export async function bundleForNative(file, extraPlugins = []) {
   const result = await build({
     entryPoints: [file],
     bundle: true,
@@ -83,7 +83,7 @@ async function bundleForNative(file, extraPlugins = []) {
 
 const B64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 
-function decodeMappings(mappings) {
+export function decodeMappings(mappings) {
   const lines = [];
   let src = 0, oLine = 0, oCol = 0;
   for (const line of mappings.split(";")) {
@@ -116,7 +116,7 @@ function decodeMappings(mappings) {
   return lines;
 }
 
-function originalPosition(map, decoded, line, col, projectDir) {
+export function originalPosition(map, decoded, line, col, projectDir) {
   const segs = decoded[line] ?? [];
   let best = null;
   for (const s of segs) if (s[0] <= col) best = s;
@@ -158,7 +158,7 @@ function knum(n) {
   return /[.e]/.test(s) ? s.replace("e+", "e") : `${s}.0`;
 }
 
-class Scope {
+export class Scope {
   constructor(parent, fn = false) {
     this.parent = parent;
     this.fn = fn;
