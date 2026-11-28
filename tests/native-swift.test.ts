@@ -37,7 +37,12 @@ before(async () => {
   dist = path.join(work, "dist");
   for (const dir of new Set(Object.values(COMPONENTS))) {
     const only = Object.keys(COMPONENTS).filter((n) => COMPONENTS[n] === dir).join(",");
-    execFileSync(process.execPath, ["cli/xp.mjs", "build", dir, "--only", only, "--out", dist, "--yes"], { cwd: ROOT, stdio: "pipe" });
+    // Tes ini untuk jalur dinamis; mode typed punya tesnya sendiri (native-typed-swift.test.ts).
+    execFileSync(process.execPath, ["cli/xp.mjs", "build", dir, "--only", only, "--out", dist, "--yes"], {
+      cwd: ROOT,
+      stdio: "pipe",
+      env: { ...process.env, XP_NATIVE_MODE: "dynamic" },
+    });
   }
   // File .swift yang sama dengan yang diambil build phase iOS.
   const manifest = JSON.parse(readFileSync(path.join(dist, "manifest.json"), "utf8"));
@@ -54,7 +59,12 @@ before(async () => {
 
   const lib = path.join(work, "lib");
   mkdirSync(lib);
-  const kit = [...["JsValue", "JsBuiltins", "XPComponentRuntime"].map((f) => path.join(KIT, "Compiled", `${f}.swift`)), path.join(KIT, "XPTree.swift"), path.join(KIT, "XPJSON.swift")];
+  const kit = [
+    ...["JsValue", "JsBuiltins", "XPComponentRuntime"].map((f) => path.join(KIT, "Compiled", `${f}.swift`)),
+    ...["XPTyped", "XPStd", "XPClassName"].map((f) => path.join(KIT, "Typed", `${f}.swift`)),
+    path.join(KIT, "XPTree.swift"),
+    path.join(KIT, "XPJSON.swift"),
+  ];
   swift(["-parse-as-library", "-emit-library", "-emit-module", "-module-name", "XPKit", ...kit, "-o", path.join(lib, "libXPKit.so"), "-emit-module-path", path.join(lib, "XPKit.swiftmodule")]);
   harness = path.join(work, "harness");
   const generated = Object.keys(COMPONENTS).map((n) => path.join(gen, manifest.components[n].swift.file));

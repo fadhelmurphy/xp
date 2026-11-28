@@ -87,6 +87,7 @@ let components = manifest["components"] as? [String: [String: Any]] ?? [:]
 let names = wanted.isEmpty ? components.filter { $0.value["native"] != nil }.keys.sorted() : wanted
 var sources: [String] = []
 var entries: [String] = []
+var typedEntries: [String] = []
 for name in names {
     guard let c = components[name] else { fail("komponen '\(name)' tidak ada di \(remote)/manifest.json") }
     guard let swift = c["swift"] as? [String: Any], let file = swift["file"] as? String, let hash = swift["sha256"] as? String,
@@ -99,10 +100,15 @@ for name in names {
     do { data = try fetch(file) } catch { fail("gagal mengambil \(file): \(error.localizedDescription)") }
     guard sha256(data) == hash else { fail("isi \(file) tidak cocok dengan sha256 di manifest") }
     sources.append(String(decoding: data, as: UTF8.self))
-    entries.append("        \"\(name)\": \(type)(),")
+    // Mode typed (Swift bertipe) dan mode dinamis punya registry sendiri.
+    if swift["typed"] as? Bool == true {
+        typedEntries.append("        \"\(name)\": \(type)(),")
+    } else {
+        entries.append("        \"\(name)\": \(type)(),")
+    }
 }
 
-let registry = entries.isEmpty ? "[:]" : "[\n\(entries.joined(separator: "\n"))\n    ]"
+func dictionary(_ list: [String]) -> String { list.isEmpty ? "[:]" : "[\n\(list.joined(separator: "\n"))\n    ]" }
 let text = """
 // Dibuat oleh xp-components.swift dari \(remote). Jangan diubah manual.
 import Foundation
@@ -111,8 +117,9 @@ import XPKit
 \(sources.joined(separator: "\n"))
 #if canImport(ObjectiveC)
 @objc(XPGeneratedComponents)
-public final class XPGeneratedComponents: NSObject, XPComponentRegistry {
-    public static let components: [String: XPCompiledComponent] = \(registry)
+public final class XPGeneratedComponents: NSObject, XPComponentRegistry, XPTypedRegistry {
+    nonisolated(unsafe) public static let components: [String: XPCompiledComponent] = \(dictionary(entries))
+    nonisolated(unsafe) public static let typedComponents: [String: XPTypedComponent] = \(dictionary(typedEntries))
 }
 #endif
 
@@ -122,4 +129,8 @@ if (try? String(contentsOf: output, encoding: .utf8)) != text {
     try FileManager.default.createDirectory(at: output.deletingLastPathComponent(), withIntermediateDirectories: true)
     try text.write(to: output, atomically: true, encoding: .utf8)
 }
-print("xp: \(entries.count) komponen native dari \(remote) (manifest \(manifest["builtAt"] ?? "?"))" + (entries.isEmpty ? "" : ": " + names.filter { n in entries.contains { $0.contains("\"\(n)\"") } }.joined(separator: ", ")))
+let label = names.compactMap { n -> String? in
+    if typedEntries.contains(where: { $0.contains("\"\(n)\"") }) { return "\(n) (typed)" }
+    return entries.contains(where: { $0.contains("\"\(n)\"") }) ? n : nil
+}
+print("xp: \(label.count) komponen native dari \(remote) (manifest \(manifest["builtAt"] ?? "?"))" + (label.isEmpty ? "" : ": " + label.joined(separator: ", ")))

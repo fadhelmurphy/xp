@@ -509,7 +509,7 @@ Props berupa `String`, angka, `Boolean`, `null`, `List`, atau `Map`. Kalau props
 
 Dari emulator, server lokal diakses lewat `http://10.0.2.2:4400`. Demo app dan cara menjalankannya ada di [`adapters/android/README.md`](adapters/android/README.md).
 
-Untuk build release, komponen bisa ikut dikompilasi ke dalam app sebagai kode Kotlin, jadi di Play Store tidak ada engine JS lagi. `xp build` membuat versi Kotlin-nya, dan task Gradle `xpComponents` mengambilnya dari CDN saat app di-build. Lihat [Komponen native di build release](adapters/android/README.md#komponen-native-di-build-release).
+Untuk build release, komponen bisa ikut dikompilasi ke dalam app sebagai kode Kotlin, jadi di Play Store tidak ada engine JS lagi. Kalau tipenya jelas, hasilnya Kotlin/Swift bertipe ([mode typed](docs/runtime.md#mode-typed)), sekitar 3x lebih cepat daripada terjemahan dinamis. `xp build` membuat versi Kotlin-nya, dan task Gradle `xpComponents` mengambilnya dari CDN saat app di-build. Lihat [Komponen native di build release](adapters/android/README.md#komponen-native-di-build-release).
 
 ## iOS
 
@@ -609,6 +609,7 @@ Yang belum:
 - SDK Android: bagian tree, style, JSON, arah swipe, event `xp dev`, dan verifikasi tanda tangan sudah dites dengan kotlinc. Bagian Compose (termasuk timer, swipe, drag, dan reload `live`) belum pernah dikompilasi atau dijalankan di emulator.
 - SDK iOS: kode Swift belum dikompilasi. Jalankan `swift test` di Mac.
 - Komponen terkompilasi: belum dijalankan di dalam build Android sungguhan (Gradle + Compose) maupun di Xcode (build phase + SwiftUI).
+- Mode typed: hasil Kotlin dan Swift-nya dites diferensial dengan bundle JS (JVM dan swiftc), tanpa peringatan compiler. Renderer Compose `XPTypedView` dan sambungan SwiftUI-nya belum dikompilasi di sini.
 - Tampilan style baru di Android dan iOS (posisi absolut, grid, shadow, gradien, border per sisi, transform, animasi berulang, style saat ditekan) belum dilihat di emulator; parsing style-nya sudah dites dengan kotlinc.
 - Belum ada GIF demo untuk Android dan iOS.
 - Layout di mobile belum memakai Yoga, jadi hasilnya bisa sedikit berbeda dari web.

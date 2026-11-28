@@ -136,6 +136,32 @@ public final class XPTree {
         }
     }
 
+    /// Mode typed: tree host dari XPTypedRuntime disalin langsung ke node, tanpa batch operasi dan
+    /// tanpa JSON. Handler ditulis dengan bentuk yang sama dengan bundle JS (`{"$fn": "id:prop"}`),
+    /// jadi renderer SwiftUI-nya sama untuk semua mode.
+    public func sync(_ roots: [XPHostNode]) {
+        var seen: Set<Int> = [XPTree.rootID]
+        func visit(_ h: XPHostNode) {
+            seen.insert(h.id)
+            let n: XPNode
+            if let existing = nodes[h.id] {
+                n = existing
+            } else {
+                n = XPNode(id: h.id, type: h.type, createdAt: revision + 1)
+                nodes[h.id] = n
+            }
+            var props = h.props
+            for k in h.handlers.keys { props[k] = ["$fn": "\(h.id):\(k)"] }
+            n.props = props
+            n.children = h.children.map(\.id)
+            h.children.forEach(visit)
+        }
+        roots.forEach(visit)
+        root.children = roots.map(\.id)
+        for id in nodes.keys where !seen.contains(id) { nodes.removeValue(forKey: id) }
+        revision += 1
+    }
+
     private func existing(_ id: Int) throws -> XPNode {
         guard let n = nodes[id] else { throw XPError.invalid("node \(id) tidak ada (operasi tidak konsisten)") }
         return n

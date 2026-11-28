@@ -10,9 +10,10 @@ private let logger = Logger(subsystem: "dev.xp", category: "XPKit")
 
 /// Merender komponen xp dengan SwiftUI (tanpa WebView).
 ///
-/// Kalau komponen ikut dikompilasi ke app (script `xp-components.sh` di build phase), yang dipakai
-/// adalah versi Swift-nya, tanpa unduhan dan tanpa JavaScriptCore. Kalau tidak, atau saat `live`,
-/// bundle dimuat dari URL dan dijalankan di JavaScriptCore.
+/// Kalau komponen ikut dikompilasi ke app (script `xp-components.swift` di build phase), yang dipakai
+/// adalah versi Swift-nya, tanpa unduhan dan tanpa JavaScriptCore: mode typed (Swift bertipe) kalau
+/// ada, kalau tidak versi dinamis. Kalau tidak ada keduanya, atau saat `live`, bundle dimuat dari URL
+/// dan dijalankan di JavaScriptCore.
 ///
 ///     XPView(base: URL(string: "https://cdn.kamu/xp")!, name: "promo-modal",
 ///            props: ["title": "Kelas IELTS", "price": 150000])
@@ -143,6 +144,9 @@ final class XPModel: ObservableObject {
     private(set) var tree = XPTree()
 
     private var engine: XPRuntime?
+    /// Mode typed: komponen Swift bertipe, dijalankan langsung di main thread tanpa batch operasi.
+    private var typed: XPTypedRuntime?
+    private var typedNodes: [Int: XPHostNode] = [:]
     private var file: String?
     private var loadedKey: String?
     private var mountedProps: String?
@@ -157,6 +161,10 @@ final class XPModel: ObservableObject {
         guard environment.screen != screen || environment.dark != dark else { return }
         environment = (screen, dark)
         self.screen = screen
+        if let typed {
+            typed.environment(width: Double(screen.width).rounded(), height: Double(screen.height).rounded(), dark: dark)
+            return
+        }
         enqueue { engine in
             try self.apply(try await engine.environment(screen: screen, dark: dark))
         }
@@ -167,6 +175,10 @@ final class XPModel: ObservableObject {
         let key = "\(base.absoluteString)|\(name)"
         guard loadedKey != key else { return }
         loadedKey = key
+        if !live, let component = XPCompiled.typed(name) {
+            await MainActor.run { self.mountTyped(component) }
+            return
+        }
         do {
             let engine: XPRuntime
             if !live, let compiled = XPCompiled.component(name) {
@@ -188,6 +200,52 @@ final class XPModel: ObservableObject {
         } catch {
             logger.error("gagal memuat \(name, privacy: .public): \(error.localizedDescription, privacy: .public)")
             state = .failed(error.localizedDescription)
+        }
+    }
+
+    private func mountTyped(_ component: XPTypedComponent) {
+        let rt = XPTypedRuntime(component)
+        // setState dari event/timer: render ulang di putaran main loop berikutnya (beberapa setState digabung).
+        rt.onInvalidate = { [weak rt] in DispatchQueue.main.async { rt?.flush() } }
+        rt.onCommit = { [weak self, weak rt] in
+            guard let self, let rt else { return }
+            self.tree.sync(rt.root)
+            self.typedNodes = [:]
+            self.index(rt.root)
+            self.revision = self.tree.revision
+            self.armTypedTimer()
+        }
+        typed = rt
+        rt.environment(width: Double(environment.screen.width).rounded(), height: Double(environment.screen.height).rounded(), dark: environment.dark)
+        mountedProps = latestProps
+        rt.mount(Self.props(latestProps))
+        mountRevision = tree.revision
+        state = .ready
+    }
+
+    private func index(_ nodes: [XPHostNode]) {
+        for n in nodes {
+            typedNodes[n.id] = n
+            index(n.children)
+        }
+    }
+
+    private static func props(_ json: String) -> [String: Any?] {
+        guard let v = try? JsJSON.parse(json) else { return [:] }
+        return XPStd.native(v) as? [String: Any?] ?? [:]
+    }
+
+    private var typedTimer: Task<Void, Never>?
+
+    private func armTypedTimer() {
+        typedTimer?.cancel()
+        guard let rt = typed else { return }
+        let wait = rt.nextTimer()
+        guard wait >= 0 else { return }
+        typedTimer = Task { @MainActor [weak rt] in
+            try? await Task.sleep(nanoseconds: UInt64(wait) * 1_000_000)
+            guard !Task.isCancelled else { return }
+            rt?.tick()
         }
     }
 
@@ -219,6 +277,12 @@ final class XPModel: ObservableObject {
     /// Props dari app host berubah → XP.update (tanpa remount, state komponen tetap).
     func update(_ propsJSON: String) {
         latestProps = propsJSON
+        if let typed {
+            guard mountedProps != propsJSON else { return }
+            mountedProps = propsJSON
+            typed.update(Self.props(propsJSON))
+            return
+        }
         enqueue { engine in
             guard self.mountedProps != propsJSON else { return }
             self.mountedProps = propsJSON
@@ -228,6 +292,13 @@ final class XPModel: ObservableObject {
     }
 
     func dispatch(_ key: String, _ args: [Any] = []) {
+        if let typed {
+            // key = "id:prop", sama dengan handler di XPTree
+            let parts = key.split(separator: ":", maxSplits: 1)
+            guard parts.count == 2, let id = Int(parts[0]), let handler = typedNodes[id]?.handler(String(parts[1])) else { return }
+            typed.dispatch(handler, args.map { XPStd.flat($0 is NSNull ? nil : $0) })
+            return
+        }
         enqueue { engine in
             let batches = try await engine.dispatch(key, args: args)
             try self.apply(batches)

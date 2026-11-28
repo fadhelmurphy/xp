@@ -24,6 +24,7 @@ import { buildWeb, detectKind } from "./web.mjs";
 import { compileKotlin, kotlinName } from "./native-kotlin.mjs";
 import { compileSwift, swiftName } from "./native-swift.mjs";
 import { compileTypedKotlin, typedName } from "./native-typed.mjs";
+import { compileTypedSwift } from "./native-typed-swift.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const RUNTIME = path.resolve(here, "..", "runtime");
@@ -319,21 +320,25 @@ export async function runBuild({ srcDir, outDir, jobs, clean = false, projectDir
       delete record.swift;
       if (outputs.includes("native")) {
         const plugins = () => (classes ? [classNamePlugin(classes, { runtimeDir: RUNTIME, native: true })] : []);
-        // Kotlin bertipe kalau bisa (lebih cepat), kalau tidak versi dinamis.
-        let typed = null;
-        if (process.env.XP_NATIVE_MODE !== "dynamic") {
+        // Kotlin/Swift bertipe kalau bisa (lebih cepat), kalau tidak versi dinamis.
+        const tryTyped = (lang, compile) => {
+          if (process.env.XP_NATIVE_MODE === "dynamic") return null;
           try {
-            typed = compileTypedKotlin({ file, name, projectDir, classes });
+            return compile({ file, name, projectDir, classes });
           } catch (e) {
             const lines = String(e.message).split("\n");
-            warnings.push(`Kotlin memakai mode dinamis, belum bisa mode typed:\n      ${lines.slice(0, 3).join("\n      ")}${lines.length > 3 ? `\n      (+${lines.length - 3} lagi)` : ""}`);
+            warnings.push(`${lang} memakai mode dinamis, belum bisa mode typed:\n      ${lines.slice(0, 3).join("\n      ")}${lines.length > 3 ? `\n      (+${lines.length - 3} lagi)` : ""}`);
+            return null;
           }
-        }
+        };
+        const typedKt = tryTyped("Kotlin", compileTypedKotlin);
+        const typedSw = tryTyped("Swift", compileTypedSwift);
         try {
-          const kt = typed ? { code: typed.code } : await compileKotlin({ file, name, projectDir, plugins: plugins() });
-          const sw = await compileSwift({ file, name, projectDir, plugins: plugins() });
-          const ktExtra = typed ? { object: typedName(name), typed: true } : { object: kotlinName(name) };
-          for (const [key, ext, code, extra] of [["kotlin", "kt", kt.code, ktExtra], ["swift", "swift", sw.code, { type: swiftName(name) }]]) {
+          const kt = typedKt ? { code: typedKt.code } : await compileKotlin({ file, name, projectDir, plugins: plugins() });
+          const sw = typedSw ? { code: typedSw.code } : await compileSwift({ file, name, projectDir, plugins: plugins() });
+          const ktExtra = typedKt ? { object: typedName(name), typed: true } : { object: kotlinName(name) };
+          const swExtra = typedSw ? { type: typedName(name), typed: true } : { type: swiftName(name) };
+          for (const [key, ext, code, extra] of [["kotlin", "kt", kt.code, ktExtra], ["swift", "swift", sw.code, swExtra]]) {
             const hash = sha(code);
             const fileName = `${name}.${key}.${hash.slice(0, 10)}.${ext}`;
             written.push([fileName, code]);

@@ -20,9 +20,9 @@ const RUNTIME = path.resolve(here, "..", "runtime");
 
 export class TypedCompileError extends Error {}
 
-const PRIMITIVES = new Set(["View", "Text", "Image", "Pressable", "ScrollView", "TextInput", "Modal", "NativeView"]);
-const HOOKS = new Set(["useState", "useEffect", "useMemo", "useCallback", "useRef", "environment"]);
-const TIMERS = new Set(["setTimeout", "setInterval", "clearTimeout", "clearInterval"]);
+export const PRIMITIVES = new Set(["View", "Text", "Image", "Pressable", "ScrollView", "TextInput", "Modal", "NativeView"]);
+export const HOOKS = new Set(["useState", "useEffect", "useMemo", "useCallback", "useRef", "environment"]);
+export const TIMERS = new Set(["setTimeout", "setInterval", "clearTimeout", "clearInterval"]);
 
 const KOTLIN_KEYWORDS = new Set(
   "as break class continue do else false for fun if in interface is null object package return super this throw true try typealias typeof val var when while by catch constructor delegate dynamic field file finally get import init param property receiver set setparam where actual abstract annotation companion const crossinline data enum expect external final infix inline inner internal lateinit noinline open operator out override private protected public reified sealed suspend tailrec vararg value it".split(
@@ -40,7 +40,7 @@ export function typedName(name) {
 // { k: "opt", t } { k: "list", t } { k: "map", t } { k: "obj", cls } { k: "fn", params, ret }
 // { k: "setter", t } { k: "ref", t }
 
-const T = {
+export const T = {
   num: { k: "num" },
   str: { k: "str" },
   bool: { k: "bool" },
@@ -50,10 +50,10 @@ const T = {
   env: { k: "env" },
   regex: { k: "regex" },
 };
-const opt = (t) => (t.k === "opt" || t.k === "any" || t.k === "el" ? t : { k: "opt", t });
-const base = (t) => (t.k === "opt" ? t.t : t);
-const isOpt = (t) => t.k === "opt" || t.k === "any";
-const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+export const opt = (t) => (t.k === "opt" || t.k === "any" || t.k === "el" ? t : { k: "opt", t });
+export const base = (t) => (t.k === "opt" ? t.t : t);
+export const isOpt = (t) => t.k === "opt" || t.k === "any";
+export const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 
 function kotlinString(s) {
   let out = '"';
@@ -87,6 +87,7 @@ const kotlin = {
   str: kotlinString,
   num: kotlinNum,
   nil: "null",
+  bang: "!!",
   ident(n) {
     if (/^_+$/.test(n)) return "unused";
     return KOTLIN_KEYWORDS.has(n) ? `${n}_` : n.replace(/\$/g, "_S");
@@ -117,7 +118,7 @@ const kotlin = {
 };
 
 /** Normalisasi teks JSX seperti TypeScript/esbuild: baris dipangkas, baris kosong dibuang, digabung spasi. */
-function jsxText(raw) {
+export function jsxText(raw) {
   const lines = raw.split(/\r\n|\n|\r/);
   if (lines.length === 1) return raw;
   let out = "";
@@ -131,7 +132,7 @@ function jsxText(raw) {
   return out;
 }
 
-function decodeEntities(s) {
+export function decodeEntities(s) {
   return s
     .replace(/&nbsp;/g, " ")
     .replace(/&lt;/g, "<")
@@ -143,7 +144,7 @@ function decodeEntities(s) {
     .replace(/&amp;/g, "&");
 }
 
-class Compiler {
+export class Compiler {
   constructor(program, entry, projectDir, target) {
     this.program = program;
     this.checker = program.getTypeChecker();
@@ -953,7 +954,14 @@ class Compiler {
         const t = this.mapType(this.checker.getTypeOfSymbolAtLocation(this.checker.getPropertyOfType(this.checker.getTypeAtLocation(e), "current"), e), e);
         return { code: this.names.get(sym), type: { k: "ref", t } };
       }
-      return { code: this.names.get(sym), type: this.typeOfNode(e) };
+      const type = this.typeOfNode(e);
+      // TypeScript mempersempit tipe (`if (x) ...x...`), variabel di kode hasil tetap bertipe deklarasinya.
+      const declName = decl && (ts.isVariableDeclaration(decl) || ts.isParameter(decl) || ts.isBindingElement(decl)) && ts.isIdentifier(decl.name) ? decl.name : null;
+      if (declName && declName !== e) {
+        const declared = this.typeOfNode(declName);
+        if (isOpt(declared) && declared.k !== "any" && !isOpt(type) && same(base(declared), type)) return { code: `${this.names.get(sym)}${this.t.bang}`, type };
+      }
+      return { code: this.names.get(sym), type };
     }
     if (sym && this.components.has(sym)) return this.fail(e, "komponen sebagai nilai belum didukung; pakai sebagai JSX");
     return this.fail(e, `'${e.text}' belum didukung di mode typed`);
@@ -1704,7 +1712,7 @@ class Compiler {
 }
 
 const K0 = ts.SyntaxKind;
-const COMPOUND = {
+export const COMPOUND = {
   [K0.PlusEqualsToken]: K0.PlusToken,
   [K0.MinusEqualsToken]: K0.MinusToken,
   [K0.AsteriskEqualsToken]: K0.AsteriskToken,
@@ -1804,10 +1812,10 @@ function compilerOptions() {
 }
 
 /**
- * Kompilasi satu komponen ke Kotlin bertipe.
- * @returns {{ code: string, typeName: string, hash: string }}
+ * Analisis bersama Kotlin/Swift: program TypeScript, modul, nama, dan isi modul (kode target).
+ * `CompilerClass` menentukan bahasa targetnya.
  */
-export function compileTypedKotlin({ file, name, projectDir, classes = null }) {
+export function compileModules({ file, name, projectDir, classes = null, CompilerClass = Compiler, target = kotlin }) {
   const entry = path.resolve(file);
   const program = ts.createProgram([entry], compilerOptions());
   const diags = ts
@@ -1818,7 +1826,7 @@ export function compileTypedKotlin({ file, name, projectDir, classes = null }) {
     const { line, character } = d.file.getLineAndCharacterOfPosition(d.start ?? 0);
     throw new TypedCompileError(`${path.relative(projectDir, d.file.fileName)}:${line + 1}:${character + 1} error TypeScript: ${ts.flattenDiagnosticMessageText(d.messageText, " ")}`);
   }
-  const c = new Compiler(program, entry, projectDir, kotlin);
+  const c = new CompilerClass(program, entry, projectDir, target);
   c.classTable = classes;
   c.components = new Map();
   c.componentProps = new Map();
@@ -1850,13 +1858,20 @@ export function compileTypedKotlin({ file, name, projectDir, classes = null }) {
   const root = def && c.components.get(def);
   if (!root) c.errors.push(`${path.relative(projectDir, entry)} export default harus komponen`);
   if (c.errors.length) throw new TypedCompileError([...new Set(c.errors)].join("\n"));
-  const hashSrc = mods.map((m) => m.text).join("\n");
-  const hash = createHash("sha256").update(hashSrc).digest("hex").slice(0, 16);
-  const typeName = typedName(name);
+  const hash = createHash("sha256").update(mods.map((m) => m.text).join("\n")).digest("hex").slice(0, 16);
+  return { c, body, root, hash, typeName: typedName(name) };
+}
+
+/**
+ * Kompilasi satu komponen ke Kotlin bertipe.
+ * @returns {{ code: string, typeName: string, hash: string }}
+ */
+export function compileTypedKotlin({ file, name, projectDir, classes = null }) {
+  const { c, body, root, hash, typeName } = compileModules({ file, name, projectDir, classes });
   const classDecls = c.classOrder.flatMap((cls) => [...kotlinClass(cls, kotlin), ""]);
   const rootCall = root.cls ? `${root.name}(${root.cls.name}.fromHost(props), h)` : `${root.name}(Unit, h)`;
   const code = reindent(`// Dibuat oleh xp build dari ${kotlinString(name)} (mode typed). Jangan diubah manual.
-@file:Suppress("UNUSED_PARAMETER", "UNUSED_VARIABLE", "NAME_SHADOWING", "UNUSED_ANONYMOUS_PARAMETER", "RedundantExplicitType", "UNCHECKED_CAST", "SENSELESS_COMPARISON", "UNNECESSARY_SAFE_CALL", "USELESS_ELVIS")
+@file:Suppress("UNUSED_PARAMETER", "UNUSED_VARIABLE", "NAME_SHADOWING", "UNUSED_ANONYMOUS_PARAMETER", "RedundantExplicitType", "UNCHECKED_CAST", "SENSELESS_COMPARISON", "UNNECESSARY_SAFE_CALL", "USELESS_ELVIS", "UNNECESSARY_NOT_NULL_ASSERTION")
 
 package dev.xp.generated
 

@@ -315,6 +315,33 @@ Komponen yang memakai salah satunya tetap di-build seperti biasa, hanya tanpa ve
     src/promo.tsx:12:3 class belum didukung di target native
 ```
 
+### Mode typed
+
+Ada dua cara menerjemahkan komponen ke native, dan `xp build` memilih sendiri per komponen:
+
+- **Mode typed** (dicoba lebih dulu). Compiler membaca file `.tsx` asli dengan type-checker TypeScript dan menulis Kotlin/Swift bertipe: `number` jadi `Double`, `string` jadi `String`, type alias dan interface jadi class, array jadi `List`/array Swift, JSX jadi pemanggilan `el("View", ...)`. Hasilnya dirender langsung oleh runtime typed di SDK (`XPTyped.kt`, `XPTyped.swift`): tanpa nilai dinamis, tanpa daftar operasi UI, tanpa JSON.
+- **Mode dinamis** (cadangan). Bundle JS diterjemahkan apa adanya dengan nilai dinamis (`JsValue`), lalu UI-nya lewat operasi seperti bundle JS. Cakupannya lebih luas (lihat daftar di atas).
+
+Di JVM, mode typed sekitar 3x lebih cepat daripada mode dinamis untuk `promo-slider` (mount 2,7x, tap 3x). Angka ini dari JVM desktop, bukan HP; coba sendiri dengan `KOTLINC=... node scripts/bench-native.mjs promo-slider`.
+
+Mode typed butuh tipe yang pasti. Komponen yang memakai salah satu hal berikut otomatis memakai mode dinamis:
+
+- `any`, union yang isinya beda tipe (`string | number`), tuple, `as` yang mengubah tipe, `typeof`
+- library npm, `class`, `async`, generator, label, `case` tanpa `break`
+- spread props (`<View {...props}>`), spread object ke type alias, parameter rest
+- khusus Swift: `throw`, `Object.keys/values/entries` (urutan kunci dictionary Swift tidak tetap), fungsi sebagai deps hook (closure Swift tidak punya identitas), `===` untuk array atau fungsi
+
+`xp build` memberi tahu kalau sebuah komponen jatuh ke mode dinamis, beserta lokasinya:
+
+```
+⚠ Kotlin memakai mode dinamis, belum bisa mode typed:
+    tests/fixtures/native/kitchen-sink.tsx:37:5 case tanpa break (fallthrough) belum didukung di mode typed
+```
+
+`XP_NATIVE_MODE=dynamic xp build ...` memaksa mode dinamis untuk semua komponen.
+
+Perbedaan kecil yang perlu diketahui di Swift: array tidak punya identitas, jadi `setItems(sama)` dan deps hook membandingkan isi array, bukan referensinya.
+
 ## Contoh lengkap
 
 - [`examples/promo-modal.tsx`](../examples/promo-modal.tsx): kartu promo, modal, state, tombol nonaktif, hitung total.

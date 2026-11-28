@@ -91,10 +91,12 @@ extra["xpComponents"] = listOf("promo-modal", "promo-slider") // kosongkan = sem
 apply(from = "C:/path/ke/xp/adapters/android/xp-components.gradle")
 ```
 
+Kalau bisa, versi Kotlin-nya **mode typed**: Kotlin bertipe (`Double`, `String`, class) yang dirender langsung tanpa QuickJS dan tanpa operasi UI. Kalau komponen memakai fitur di luar mode typed, versi Kotlin dinamis yang dipakai. Lihat [Mode typed](../../docs/runtime.md#mode-typed).
+
 `XPView` tidak perlu diubah. Kalau komponen ada di build, versi Kotlin yang dipakai. Kalau tidak ada, komponen dimuat dari `base` seperti biasa. `live = true` selalu memakai bundle dari URL supaya `xp dev` tetap bisa dipakai.
 
 - Task ini jalan sebelum setiap build (`preBuild`) dan selalu mengecek `manifest.json` terbaru. Isi setiap file dicek dengan `sha256` di manifest. Kalau CDN tidak bisa dihubungi, hasil unduhan sebelumnya yang dipakai.
-- Cek berhasil: Build Output berisi `xp: N komponen native dari ... (manifest <waktu build>)`, dan Logcat `tag:XPView` menulis `komponen terkompilasi (Kotlin, tanpa QuickJS)`. Paling meyakinkan: force stop app, nyalakan airplane mode, buka lagi; komponen native tetap tampil.
+- Cek berhasil: Build Output berisi `xp: N komponen native dari ... (manifest <waktu build>)` (komponen mode typed diberi tanda `(typed)`), dan Logcat `tag:XPView` menulis `Kotlin bertipe (mode typed)` atau `komponen terkompilasi (Kotlin, tanpa QuickJS)`. Paling meyakinkan: force stop app, nyalakan airplane mode, buka lagi; komponen native tetap tampil.
 - Komponen baru di CDN baru masuk ke app di build berikutnya. Ini memang aturan Play Store dan App Store: kode native tidak boleh diunduh saat runtime.
 - Komponen yang memakai fitur JS di luar jangkauan compiler (lihat [Kompilasi ke native](../../docs/runtime.md#kompilasi-ke-native)) tidak punya versi Kotlin. `xp build` memberi peringatan dan menyebut lokasinya, task Gradle juga, dan di app komponen itu tetap dimuat dari URL.
 - R8/ProGuard: aturan keep sudah ikut dari `consumer-rules.pro` SDK.

@@ -50,6 +50,8 @@ Kalau remote masih memakai `http://` (development), tambahkan ini di `Info.plist
    Matikan *User Script Sandboxing* di Build Settings target, atau daftarkan script dan file keluaran di *Input Files* / *Output Files* phase ini.
 2. Build sekali, lalu tambahkan `XPComponents.generated.swift` ke target app. Isinya diganti setiap build; file-nya tetap.
 
+Kalau bisa, versi Swift-nya **mode typed**: Swift bertipe (`Double`, `String`, class) yang dijalankan runtime `Sources/XPKit/Typed` tanpa JavaScriptCore dan tanpa operasi UI. Kalau komponen memakai fitur di luar mode typed, versi Swift dinamis yang dipakai. Lihat [Mode typed](../../docs/runtime.md#mode-typed). Output build phase menandai komponen mode typed dengan `(typed)`.
+
 `XPView` tidak perlu diubah. Kalau komponen ada di file itu, versi Swift yang dipakai. Kalau tidak ada, komponen dimuat dari `base` seperti biasa. `live: true` selalu memakai bundle dari URL supaya `xp dev` tetap bisa dipakai.
 
 - Setiap build mengecek `manifest.json` terbaru, dan isi setiap file dicek dengan `sha256` di manifest. Kalau CDN tidak bisa dihubungi, hasil build sebelumnya yang dipakai (dengan peringatan di Xcode).
@@ -108,3 +110,4 @@ Animasi: `transitionDuration` di style → `.animation(_:value:)` pada nilai yan
 - Swipe memakai `DragGesture` yang dipasang simultan, jadi `Button` tetap menerima tap.
 - Kode SwiftUI, JavaScriptCore, timer, swipe, signing, dan `live` belum dikompilasi di sini. Jalankan `swift test` di Mac.
 - Komponen terkompilasi: runtime `Sources/XPKit/Compiled` (Foundation saja), `XPTree`, hasil compiler, dan script `xp-components.swift` sudah dikompilasi dan dijalankan dengan swiftc di Linux; hasilnya dibandingkan langkah demi langkah dengan bundle JS (`tests/native-swift.test.ts`). Penyambungannya ke `XPView` dan build phase di Xcode belum pernah dijalankan.
+- Mode typed: runtime `Sources/XPKit/Typed`, hasil compiler, dan penyalinan tree ke `XPTree` sudah dikompilasi dengan swiftc (juga cek mode Swift 6) dan dibandingkan langkah demi langkah dengan bundle JS (`tests/native-typed-swift.test.ts`). Bagian `XPModel` di `XPView.swift` hanya dicek tipenya dengan stub; SwiftUI-nya belum dijalankan.

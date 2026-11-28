@@ -82,4 +82,16 @@ public enum XPCompiled {
     }()
 
     public static func component(_ name: String) -> XPCompiledComponent? { components[name] }
+
+    /// Komponen mode typed (Swift bertipe). Dipilih lebih dulu daripada versi dinamis.
+    public static let typedComponents: [String: XPTypedComponent] = {
+        #if canImport(ObjectiveC)
+        let registry = NSClassFromString("XPGeneratedComponents") as? XPTypedRegistry.Type
+        return registry?.typedComponents ?? [:]
+        #else
+        return [:]
+        #endif
+    }()
+
+    public static func typed(_ name: String) -> XPTypedComponent? { typedComponents[name] }
 }
